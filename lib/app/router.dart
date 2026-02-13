@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/about/about_page.dart';
 import '../features/posts/ui/home_page.dart';
 import '../features/posts/ui/post_detail_page.dart';
 import '../features/posts/ui/post_list_page.dart';
 import '../features/posts/ui/tag_page.dart';
+import '../features/posts/ui/tags_page.dart';
 
 GoRouter buildRouter() {
   return GoRouter(
@@ -25,11 +27,19 @@ GoRouter buildRouter() {
         },
       ),
       GoRoute(
+        path: '/tags',
+        builder: (context, state) => const TagsPage(),
+      ),
+      GoRoute(
         path: '/tags/:tag',
         builder: (context, state) {
           final tag = state.pathParameters['tag']!;
           return TagPage(tag: tag);
         },
+      ),
+      GoRoute(
+        path: '/about',
+        builder: (context, state) => const AboutPage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

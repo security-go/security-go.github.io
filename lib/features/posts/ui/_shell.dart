@@ -115,6 +115,16 @@ class AppShell extends StatelessWidget {
                             onPressed: () => context.go('/posts'),
                             child: const Text('Posts'),
                           ),
+                          TextButton(
+                            style: navButtonStyle,
+                            onPressed: () => context.go('/tags'),
+                            child: const Text('Tags'),
+                          ),
+                          TextButton(
+                            style: navButtonStyle,
+                            onPressed: () => context.go('/about'),
+                            child: const Text('About'),
+                          ),
                         ],
                       ),
 

@@ -13,6 +13,16 @@ class PostRepository {
     return copy;
   }
 
+  Map<String, int> tagCounts() {
+    final map = <String, int>{};
+    for (final p in posts) {
+      for (final t in p.tags) {
+        map[t] = (map[t] ?? 0) + 1;
+      }
+    }
+    return map;
+  }
+
   List<Post> listByTag(String tag) {
     final normalized = tag.toLowerCase();
     return listAll()
