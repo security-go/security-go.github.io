@@ -14,8 +14,8 @@ class AppShell extends StatelessWidget {
 
   static const double _contentMaxWidth = 900;
   // Header is intentionally a bit wider than the main reading width.
-  // (e.g., main 900px, header 1080px = +10% each side)
-  static const double _headerMaxWidth = _contentMaxWidth * 1.2;
+  // (e.g., main 900px, header 990px = +5% each side)
+  static const double _headerMaxWidth = _contentMaxWidth * 1.1;
 
   @override
   Widget build(BuildContext context) {
@@ -99,29 +99,26 @@ class AppShell extends StatelessWidget {
                         ),
                       ),
 
-                      // Middle navigation
-                      Expanded(
-                        child: Center(
-                          child: Wrap(
-                            spacing: 8,
-                            children: [
-                              TextButton(
-                                style: navButtonStyle,
-                                onPressed: () => context.go('/'),
-                                child: const Text('Home'),
-                              ),
-                              TextButton(
-                                style: navButtonStyle,
-                                onPressed: () => context.go('/posts'),
-                                child: const Text('Posts'),
-                              ),
-                            ],
+                      const SizedBox(width: 14),
+
+                      // Navigation (left, next to logo)
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          TextButton(
+                            style: navButtonStyle,
+                            onPressed: () => context.go('/'),
+                            child: const Text('Home'),
                           ),
-                        ),
+                          TextButton(
+                            style: navButtonStyle,
+                            onPressed: () => context.go('/posts'),
+                            child: const Text('Posts'),
+                          ),
+                        ],
                       ),
 
-                      // Right-side balance (keeps middle menu visually centered)
-                      SizedBox(width: isDesktop ? 180 : 0),
+                      const Spacer(),
                     ],
                   ),
                 ),
