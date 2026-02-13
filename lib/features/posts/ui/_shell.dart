@@ -40,10 +40,46 @@ class AppShell extends StatelessWidget {
                   padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                   child: Row(
                     children: [
-                      // Logo (left)
+                      // Logo (left) - mark + wordmark
                       InkWell(
                         onTap: () => context.go('/'),
-                        child: Text("Kogoon's Blog", style: logoStyle),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: isDesktop ? 34 : 30,
+                                height: isDesktop ? 34 : 30,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  'K',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w900,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onPrimaryContainer,
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text("Kogoon's Blog", style: logoStyle),
+                            ],
+                          ),
+                        ),
                       ),
 
                       // Middle navigation
