@@ -13,7 +13,7 @@ class HomePage extends StatelessWidget {
     final latest = repo.listAll().take(5).toList(growable: false);
 
     return AppShell(
-      title: 'My Blog',
+      title: "Kogoon's Blog",
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
