@@ -80,7 +80,7 @@ class AppShell extends StatelessWidget {
                                 ),
                                 alignment: Alignment.center,
                                 child: Text(
-                                  'K',
+                                  'S',
                                   style: Theme.of(context)
                                       .textTheme
                                       .titleMedium
