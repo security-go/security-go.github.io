@@ -45,7 +45,7 @@ class _AboutBody extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                "Kogoon",
+                "security-go",
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -78,13 +78,6 @@ class _AboutBody extends StatelessWidget {
         _LinkTile(
           title: 'LinkedIn',
           subtitle: 'https://linkedin.com/in/your-id',
-        ),
-        const SizedBox(height: 20),
-        Text('Notes', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
-        const Text(
-          '- 위 링크들은 placeholder야. 실제 값으로 바꿔서 쓰면 됨.\n'
-          '- 프로필 이미지는 나중에 assets로 넣어서 CircleAvatar로 교체하면 깔끔함.',
         ),
       ],
     );

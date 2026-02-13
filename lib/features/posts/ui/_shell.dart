@@ -93,7 +93,7 @@ class AppShell extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              Text("Kogoon's Blog", style: logoStyle),
+                              Text("security-go's blog", style: logoStyle),
                             ],
                           ),
                         ),
@@ -102,33 +102,40 @@ class AppShell extends StatelessWidget {
                       const SizedBox(width: 14),
 
                       // Navigation (left, next to logo)
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          TextButton(
-                            style: navButtonStyle,
-                            onPressed: () => context.go('/'),
-                            child: const Text('Home'),
+                      // Use horizontal scroll on narrow widths to avoid overflows.
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Wrap(
+                              spacing: 8,
+                              children: [
+                                TextButton(
+                                  style: navButtonStyle,
+                                  onPressed: () => context.go('/'),
+                                  child: const Text('Home'),
+                                ),
+                                TextButton(
+                                  style: navButtonStyle,
+                                  onPressed: () => context.go('/posts'),
+                                  child: const Text('Posts'),
+                                ),
+                                TextButton(
+                                  style: navButtonStyle,
+                                  onPressed: () => context.go('/tags'),
+                                  child: const Text('Tags'),
+                                ),
+                                TextButton(
+                                  style: navButtonStyle,
+                                  onPressed: () => context.go('/about'),
+                                  child: const Text('About'),
+                                ),
+                              ],
+                            ),
                           ),
-                          TextButton(
-                            style: navButtonStyle,
-                            onPressed: () => context.go('/posts'),
-                            child: const Text('Posts'),
-                          ),
-                          TextButton(
-                            style: navButtonStyle,
-                            onPressed: () => context.go('/tags'),
-                            child: const Text('Tags'),
-                          ),
-                          TextButton(
-                            style: navButtonStyle,
-                            onPressed: () => context.go('/about'),
-                            child: const Text('About'),
-                          ),
-                        ],
+                        ),
                       ),
-
-                      const Spacer(),
                     ],
                   ),
                 ),
