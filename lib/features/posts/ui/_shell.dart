@@ -13,6 +13,9 @@ class AppShell extends StatelessWidget {
   final Widget child;
 
   static const double _contentMaxWidth = 900;
+  // Header is intentionally a bit wider than the main reading width.
+  // (e.g., main 900px, header 1080px = +10% each side)
+  static const double _headerMaxWidth = _contentMaxWidth * 1.2;
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +31,20 @@ class AppShell extends StatelessWidget {
               fontSize: isDesktop ? 24 : 20,
             );
 
+        final navTextStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
+              // ~10–20% larger than default
+              fontSize: isDesktop ? 16.5 : 15.5,
+              fontWeight: FontWeight.w600,
+            );
+
+        final navButtonStyle = TextButton.styleFrom(
+          textStyle: navTextStyle,
+          padding: EdgeInsets.symmetric(
+            horizontal: isDesktop ? 14 : 10,
+            vertical: isDesktop ? 12 : 10,
+          ),
+        );
+
         return Scaffold(
           appBar: AppBar(
             automaticallyImplyLeading: false,
@@ -35,7 +52,7 @@ class AppShell extends StatelessWidget {
             titleSpacing: 0,
             title: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: _contentMaxWidth),
+                constraints: const BoxConstraints(maxWidth: _headerMaxWidth),
                 child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                   child: Row(
@@ -89,10 +106,12 @@ class AppShell extends StatelessWidget {
                             spacing: 8,
                             children: [
                               TextButton(
+                                style: navButtonStyle,
                                 onPressed: () => context.go('/'),
                                 child: const Text('Home'),
                               ),
                               TextButton(
+                                style: navButtonStyle,
                                 onPressed: () => context.go('/posts'),
                                 child: const Text('Posts'),
                               ),
