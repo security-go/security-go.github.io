@@ -36,3 +36,19 @@ flutter pub get
 dart run tool/build_posts.dart
 flutter run -d chrome
 ```
+
+## Deploy to GitHub Pages (via GitHub Actions)
+
+This repo includes a workflow: `.github/workflows/pages.yml`.
+
+### One-time GitHub settings
+
+1. Push this repository to GitHub.
+2. In GitHub repo settings:
+   - **Settings → Pages**
+   - **Build and deployment → Source:** select **GitHub Actions**
+
+### Notes
+
+- This is set up for **root** Pages deployments (e.g. `https://security-go.github.io/`).
+- Deep links work because `web/404.html` mirrors `web/index.html`.
