@@ -93,7 +93,7 @@ class AppShell extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              Text("security-go's blog", style: logoStyle),
+                              Text("SG's blog", style: logoStyle),
                             ],
                           ),
                         ),

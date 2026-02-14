@@ -13,7 +13,7 @@ class BlogApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: "security-go's blog",
+      title: "SG's blog",
       theme: buildTheme(),
       routerConfig: buildRouter(),
     );

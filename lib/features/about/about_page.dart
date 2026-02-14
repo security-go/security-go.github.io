@@ -36,7 +36,7 @@ class _AboutBody extends StatelessWidget {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  'K',
+                  'S',
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
                         fontWeight: FontWeight.w900,
                         color: cs.onPrimaryContainer,

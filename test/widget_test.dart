@@ -5,6 +5,6 @@ import 'package:my_blog/main.dart';
 void main() {
   testWidgets('App boots', (WidgetTester tester) async {
     await tester.pumpWidget(const BlogApp());
-    expect(find.text("security-go's blog"), findsWidgets);
+    expect(find.text("SG's blog"), findsWidgets);
   });
 }
