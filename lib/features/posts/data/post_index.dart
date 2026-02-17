@@ -7,6 +7,14 @@ import '../domain/post.dart';
 
 const posts = <Post>[
   Post(
+    slug: "2026-02-17-interactive-fiction-flutter-game",
+    title: "설 연휴에 30분짜리 추리/서스펜스 인터랙티브 픽션 게임 기획하기 (Flutter)",
+    date: "2026-02-17",
+    tags: <String>["flutter", "game", "interactive-fiction", "planning"],
+    summary: "텍스트 기반 선택형 게임을 Flutter로 만들기 위해 ‘노드/분기/변수’ 스케일을 30분 기준으로 잡아본 기록.",
+    assetPath: "content/posts/2026-02-17-interactive-fiction-flutter-game.md",
+  ),
+  Post(
     slug: "2026-02-13-flutter-web-blog",
     title: "Flutter Web 블로그 시작",
     date: "2026-02-13",
