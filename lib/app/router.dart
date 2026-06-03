@@ -8,38 +8,87 @@ import '../features/posts/ui/post_list_page.dart';
 import '../features/posts/ui/tag_page.dart';
 import '../features/posts/ui/tags_page.dart';
 
+const _kTransitionDuration = Duration(milliseconds: 160);
+const _kReverseTransitionDuration = Duration(milliseconds: 140);
+
+CustomTransitionPage<T> _buildTransitionPage<T>({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  // UX goals:
+  // - short duration (feels snappy)
+  // - cheap animation (fade + tiny slide)
+  // - symmetric reverse (back button feels natural)
+  return CustomTransitionPage<T>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: _kTransitionDuration,
+    reverseTransitionDuration: _kReverseTransitionDuration,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final fade = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeOutCubic,
+      );
+
+      // A very small slide to avoid "teleport" feeling, but keep it cheap.
+      final slide = Tween<Offset>(
+        begin: const Offset(0, 0.02),
+        end: Offset.zero,
+      ).animate(fade);
+
+      return FadeTransition(
+        opacity: fade,
+        child: SlideTransition(position: slide, child: child),
+      );
+    },
+  );
+}
+
 GoRouter buildRouter() {
   return GoRouter(
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) => const HomePage(),
+        pageBuilder: (context, state) =>
+            _buildTransitionPage<void>(state: state, child: const HomePage()),
       ),
       GoRoute(
         path: '/posts',
-        builder: (context, state) => const PostListPage(),
+        pageBuilder: (context, state) => _buildTransitionPage<void>(
+          state: state,
+          child: const PostListPage(),
+        ),
       ),
       GoRoute(
         path: '/post/:slug',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final slug = state.pathParameters['slug']!;
-          return PostDetailPage(slug: slug);
+          return _buildTransitionPage<void>(
+            state: state,
+            child: PostDetailPage(slug: slug),
+          );
         },
       ),
       GoRoute(
         path: '/tags',
-        builder: (context, state) => const TagsPage(),
+        pageBuilder: (context, state) =>
+            _buildTransitionPage<void>(state: state, child: const TagsPage()),
       ),
       GoRoute(
         path: '/tags/:tag',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final tag = state.pathParameters['tag']!;
-          return TagPage(tag: tag);
+          return _buildTransitionPage<void>(
+            state: state,
+            child: TagPage(tag: tag),
+          );
         },
       ),
       GoRoute(
         path: '/about',
-        builder: (context, state) => const AboutPage(),
+        pageBuilder: (context, state) =>
+            _buildTransitionPage<void>(state: state, child: const AboutPage()),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
