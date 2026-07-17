@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17202a">
+  <meta name="description" content="브라우저에 저장되는 레트로 픽셀 방치형 클리커 게임 PIXEL MINE">
+  <title>PIXEL MINE - 픽셀 광산</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="game.js" defer></script>
+</head>
+<body>
+  <noscript>
+    <div class="noscript-message">PIXEL MINE을 실행하려면 JavaScript를 활성화해주세요.</div>
+  </noscript>
+
+  <div id="startOverlay" class="start-overlay" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+    <section class="start-card pixel-panel">
+      <div class="logo-block" aria-hidden="true">
+        <span class="logo-pixel logo-pixel--one"></span>
+        <span class="logo-pixel logo-pixel--two"></span>
+        <span class="logo-pixel logo-pixel--three"></span>
+      </div>
+      <p class="eyebrow">LOCAL IDLE CLICKER</p>
+      <h1 id="startTitle" class="game-title">PIXEL<br>MINE</h1>
+      <p class="start-subtitle">로그인 없이 시작하는 나만의 픽셀 광산</p>
+
+      <div class="protocol-row">
+        <span class="protocol-label">접속 상태</span>
+        <strong id="protocolStatus" class="status-chip">확인 중</strong>
+      </div>
+
+      <div class="storage-warning" role="note" aria-label="저장 안내">
+        <h2>저장 안내</h2>
+        <p>진행 상황은 서버가 아닌 <strong>현재 브라우저의 로컬 저장소</strong>에만 저장됩니다.</p>
+        <ul>
+          <li>브라우저 데이터 삭제, 시크릿 모드, 기기 변경 시 저장이 사라질 수 있습니다.</li>
+          <li>저장 공간 정책이나 Safari/WebKit의 장기 미사용 정책으로 삭제될 수 있습니다.</li>
+          <li>게임 안의 <strong>세이브 코드 내보내기</strong>로 정기적으로 백업해주세요.</li>
+        </ul>
+      </div>
+
+      <p id="startStatus" class="start-status" aria-live="polite">
+        아래 버튼을 누르면 로컬 세이브를 불러오고 게임을 시작합니다.
+      </p>
+      <button id="startButton" class="pixel-button pixel-button--primary start-button" type="button" disabled>
+        저장 안내를 확인하고 게임 시작
+      </button>
+      <p class="start-footnote">영구 저장소 요청이 거절되어도 게임은 시작할 수 있으며, 영구 보존을 보장하지 않습니다.</p>
+    </section>
+  </div>
+
+  <main id="gameApp" class="game-shell is-hidden" aria-hidden="true">
+    <header class="topbar pixel-panel">
+      <div>
+        <p class="eyebrow">LOCAL IDLE CLICKER</p>
+        <h1 class="topbar-title">PIXEL MINE</h1>
+        <p class="topbar-korean">픽셀 광산</p>
+      </div>
+      <div class="topbar-actions">
+        <span id="saveIndicator" class="save-indicator" aria-live="polite">시작 준비</span>
+        <button id="manualSaveButton" class="pixel-button pixel-button--small" type="button">지금 저장</button>
+      </div>
+    </header>
+
+    <div id="sessionWarning" class="session-warning is-hidden" role="alert"></div>
+
+    <section class="stats-grid" aria-label="광산 현황">
+      <article class="stat-card pixel-panel">
+        <span class="stat-label">보유 광석</span>
+        <strong id="currencyValue" class="stat-value">0</strong>
+      </article>
+      <article class="stat-card pixel-panel">
+        <span class="stat-label">클릭당</span>
+        <strong id="perClickValue" class="stat-value">1</strong>
+      </article>
+      <article class="stat-card pixel-panel">
+        <span class="stat-label">초당 생산</span>
+        <strong id="perSecondValue" class="stat-value">0</strong>
+      </article>
+      <article class="stat-card pixel-panel">
+        <span class="stat-label">누적 채굴</span>
+        <strong id="totalEarnedValue" class="stat-value">0</strong>
+      </article>
+    </section>
+
+    <div class="main-grid">
+      <section class="mine-section pixel-panel" aria-labelledby="mineHeading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">MINE SHAFT 01</p>
+            <h2 id="mineHeading">광맥 채굴</h2>
+          </div>
+          <span class="section-badge">ACTIVE</span>
+        </div>
+
+        <div class="mine-stage">
+          <div class="cave-dots" aria-hidden="true"></div>
+          <button id="mineButton" class="mine-button" type="button" aria-label="광맥을 채굴해 광석 획득">
+            <canvas id="oreCanvas" width="24" height="24" aria-hidden="true"></canvas>
+            <span class="mine-button-label">광맥 채굴</span>
+            <span id="mineGainLabel" class="mine-button-gain">+1 광석</span>
+          </button>
+        </div>
+
+        <div class="mine-summary">
+          <span>총 클릭 <strong id="totalClicksValue">0</strong>회</span>
+          <span>오프라인 누적 <strong id="offlineEarnedValue">0</strong></span>
+        </div>
+      </section>
+
+      <section class="shop-section pixel-panel" aria-labelledby="shopHeading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">UPGRADE SHOP</p>
+            <h2 id="shopHeading">광산 상점</h2>
+          </div>
+          <span class="section-badge">6 ITEMS</span>
+        </div>
+        <div id="upgradeList" class="upgrade-list"></div>
+      </section>
+    </div>
+
+    <section class="achievements-section pixel-panel" aria-labelledby="achievementsHeading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">MILESTONES</p>
+          <h2 id="achievementsHeading">업적 기록</h2>
+        </div>
+        <span id="achievementCount" class="section-badge">0 / 8</span>
+      </div>
+      <div id="achievementList" class="achievement-grid"></div>
+    </section>
+
+    <section class="save-section pixel-panel" aria-labelledby="saveHeading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">SAVE CONTROL</p>
+          <h2 id="saveHeading">저장 및 백업</h2>
+        </div>
+        <span class="section-badge">LOCAL ONLY</span>
+      </div>
+
+      <div class="save-notice">
+        <strong>중요:</strong> 이 세이브는 현재 브라우저에만 있습니다. 브라우저 정책이나 사용자 데이터 삭제로 사라질 수 있으므로 세이브 코드를 별도로 보관하세요.
+      </div>
+
+      <dl class="storage-details">
+        <div>
+          <dt>로컬 저장</dt>
+          <dd id="localStorageStatus">확인 중</dd>
+        </div>
+        <div>
+          <dt>저장 보호</dt>
+          <dd id="persistenceStatus">확인 중</dd>
+        </div>
+        <div>
+          <dt>Origin 예상 사용량</dt>
+          <dd id="storageUsage">확인 중</dd>
+        </div>
+        <div>
+          <dt>현재 세이브 크기</dt>
+          <dd id="saveSize">확인 중</dd>
+        </div>
+        <div>
+          <dt>마지막 저장</dt>
+          <dd id="lastSavedValue">아직 없음</dd>
+        </div>
+      </dl>
+
+      <div class="save-actions">
+        <button id="persistenceButton" class="pixel-button" type="button">저장 보호 요청</button>
+        <button id="exportButton" class="pixel-button pixel-button--primary" type="button">세이브 코드 내보내기</button>
+        <button id="importOpenButton" class="pixel-button" type="button">세이브 코드 불러오기</button>
+        <button id="resetOpenButton" class="pixel-button pixel-button--danger" type="button">게임 초기화</button>
+      </div>
+
+      <label class="toggle-row" for="reducedMotionToggle">
+        <span>
+          <strong>모션 감소</strong>
+          <small>클릭 효과와 화면 움직임을 줄입니다.</small>
+        </span>
+        <input id="reducedMotionToggle" type="checkbox">
+      </label>
+    </section>
+
+    <footer class="game-footer">
+      <span>PIXEL MINE v1.0</span>
+      <span>NO LOGIN · NO CLOUD · LOCAL SAVE</span>
+    </footer>
+  </main>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <dialog id="offlineDialog" class="pixel-dialog">
+    <div class="dialog-content">
+      <p class="eyebrow">WELCOME BACK</p>
+      <h2>오프라인 채굴 완료</h2>
+      <div class="offline-reward-icon" aria-hidden="true">◆</div>
+      <p><strong id="offlineDuration">0초</strong> 동안 자동 채굴기가 작동했습니다.</p>
+      <p class="reward-line">획득 광석 <strong id="offlineReward">+0</strong></p>
+      <p class="dialog-note">오프라인 수익은 최대 24시간까지 인정됩니다.</p>
+      <button class="pixel-button pixel-button--primary dialog-close" type="button" data-close-dialog="offlineDialog">광산으로 돌아가기</button>
+    </div>
+  </dialog>
+
+  <dialog id="exportDialog" class="pixel-dialog pixel-dialog--wide">
+    <div class="dialog-content">
+      <p class="eyebrow">SAVE BACKUP</p>
+      <h2>세이브 코드 내보내기</h2>
+      <p>아래 코드를 안전한 곳에 복사해 보관하세요. Base64는 암호화나 위변조 방지 수단이 아닙니다.</p>
+      <label class="field-label" for="exportCode">세이브 코드</label>
+      <textarea id="exportCode" class="save-code-field" rows="8" readonly spellcheck="false"></textarea>
+      <p id="copyStatus" class="dialog-status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button id="copyExportButton" class="pixel-button pixel-button--primary" type="button">코드 복사</button>
+        <button class="pixel-button dialog-close" type="button" data-close-dialog="exportDialog">닫기</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="importDialog" class="pixel-dialog pixel-dialog--wide">
+    <div class="dialog-content">
+      <p class="eyebrow">RESTORE SAVE</p>
+      <h2>세이브 코드 불러오기</h2>
+      <p>검증이 완료된 코드만 현재 진행도를 대체합니다. 불러오기 전에 현재 세이브를 내보내는 것을 권장합니다.</p>
+      <label class="field-label" for="importCode">세이브 코드 붙여넣기</label>
+      <textarea id="importCode" class="save-code-field" rows="8" spellcheck="false" autocomplete="off" placeholder="PIXELMINE-V1:..."></textarea>
+      <p id="importStatus" class="dialog-status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button id="confirmImportButton" class="pixel-button pixel-button--primary" type="button">검증 후 불러오기</button>
+        <button class="pixel-button dialog-close" type="button" data-close-dialog="importDialog">취소</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="resetDialog" class="pixel-dialog">
+    <div class="dialog-content">
+      <p class="eyebrow">DANGER ZONE</p>
+      <h2>게임 초기화</h2>
+      <p>보유 광석, 업그레이드, 업적이 모두 사라집니다. 이 작업은 되돌릴 수 없습니다.</p>
+      <label class="confirm-row" for="resetConfirm">
+        <input id="resetConfirm" type="checkbox">
+        <span>현재 진행도를 삭제하고 새 게임을 시작하겠습니다.</span>
+      </label>
+      <p id="resetStatus" class="dialog-status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button id="confirmResetButton" class="pixel-button pixel-button--danger" type="button" disabled>완전히 초기화</button>
+        <button class="pixel-button dialog-close" type="button" data-close-dialog="resetDialog">취소</button>
+      </div>
+    </div>
+  </dialog>
+</body>
+</html>
