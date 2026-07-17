@@ -10,6 +10,8 @@ const FILE_URL = pathToFileURL(resolve(PROJECT_DIR, "index.html")).href;
 const SCREENSHOT_PATH = process.env.PIXEL_MINE_SCREENSHOT ?? "/tmp/pixel-mine-e2e.png";
 const START_SCREENSHOT_PATH = "/tmp/pixel-mine-start.png";
 const MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-mobile.png";
+const ACHIEVEMENTS_SCREENSHOT_PATH = "/tmp/pixel-mine-achievements.png";
+const SAVE_MENU_SCREENSHOT_PATH = "/tmp/pixel-mine-save-menu.png";
 const DEBUG_BASE = `http://${DEBUG_HOST}:${DEBUG_PORT}`;
 
 const passed = [];
@@ -205,6 +207,73 @@ async function run() {
     assert(started.storageUsage.includes("Origin") && started.saveSize.includes("UTF-8 JSON"), "Origin 사용량과 세이브 크기가 구분되지 않았습니다.");
     pass("저장 보호 결과, Origin 예상 사용량, 세이브 UTF-8 크기를 구분해 표시한다");
 
+    const featureNavigation = await page.evaluate(`(() => {
+      const gameApp = document.getElementById('gameApp');
+      const achievementList = document.getElementById('achievementList');
+      const saveActions = document.querySelector('.save-actions');
+      const achievementButton = document.getElementById('achievementsMenuButton');
+      const saveButton = document.getElementById('saveMenuButton');
+      return {
+        achievementOutsideGame: !gameApp.contains(achievementList),
+        saveOutsideGame: !gameApp.contains(saveActions),
+        menuButtons: document.querySelectorAll('.utility-menu-button').length,
+        achievementControls: achievementButton.getAttribute('aria-controls'),
+        saveControls: saveButton.getAttribute('aria-controls'),
+        dialogsClosed: !document.getElementById('achievementsDialog').open && !document.getElementById('saveManagementDialog').open
+      };
+    })()`);
+    assert(
+      featureNavigation.achievementOutsideGame && featureNavigation.saveOutsideGame && featureNavigation.dialogsClosed,
+      `업적 또는 저장 기능이 게임 본문에서 분리되지 않았습니다: ${JSON.stringify(featureNavigation)}`,
+    );
+    assert(
+      featureNavigation.menuButtons === 2 &&
+      featureNavigation.achievementControls === "achievementsDialog" &&
+      featureNavigation.saveControls === "saveManagementDialog",
+      "상단 아이콘 메뉴와 다이얼로그 연결이 올바르지 않습니다.",
+    );
+    pass("업적과 저장 기능을 게임 본문에서 분리하고 상단 아이콘 메뉴 두 개에 연결한다");
+
+    await page.evaluate("document.getElementById('achievementsMenuButton').click(); true");
+    await waitFor(page, "document.getElementById('achievementsDialog').open");
+    const achievementMenu = await page.evaluate(`(() => ({
+      expanded: document.getElementById('achievementsMenuButton').getAttribute('aria-expanded'),
+      badge: document.getElementById('achievementMenuBadge').textContent,
+      count: document.getElementById('achievementCount').textContent,
+      cards: document.querySelectorAll('#achievementsDialog .achievement-card').length
+    }))()`);
+    assert(
+      achievementMenu.expanded === "true" && achievementMenu.badge === "0" && achievementMenu.count === "0 / 8" && achievementMenu.cards === 8,
+      `업적 팝업 내용이 올바르지 않습니다: ${JSON.stringify(achievementMenu)}`,
+    );
+    const achievementScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(ACHIEVEMENTS_SCREENSHOT_PATH, Buffer.from(achievementScreenshot.data, "base64"));
+    await page.evaluate("document.querySelector('[data-close-dialog=\"achievementsDialog\"]').click(); true");
+    await waitFor(page, "!document.getElementById('achievementsDialog').open && document.getElementById('achievementsMenuButton').getAttribute('aria-expanded') === 'false'");
+    pass("업적 아이콘으로 업적 팝업을 열고 닫으며 해금 현황을 표시한다");
+
+    await page.evaluate("document.getElementById('saveMenuButton').click(); true");
+    await waitFor(page, "document.getElementById('saveManagementDialog').open");
+    const saveMenu = await page.evaluate(`(() => {
+      const dialog = document.getElementById('saveManagementDialog');
+      return {
+        expanded: document.getElementById('saveMenuButton').getAttribute('aria-expanded'),
+        hasExport: dialog.contains(document.getElementById('exportButton')),
+        hasImport: dialog.contains(document.getElementById('importOpenButton')),
+        hasReset: dialog.contains(document.getElementById('resetOpenButton')),
+        hasStorageDetails: dialog.contains(document.querySelector('.storage-details'))
+      };
+    })()`);
+    assert(
+      saveMenu.expanded === "true" && saveMenu.hasExport && saveMenu.hasImport && saveMenu.hasReset && saveMenu.hasStorageDetails,
+      `저장 팝업 내용이 올바르지 않습니다: ${JSON.stringify(saveMenu)}`,
+    );
+    const saveMenuScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(SAVE_MENU_SCREENSHOT_PATH, Buffer.from(saveMenuScreenshot.data, "base64"));
+    await page.evaluate("document.querySelector('[data-close-dialog=\"saveManagementDialog\"]').click(); true");
+    await waitFor(page, "!document.getElementById('saveManagementDialog').open && document.getElementById('saveMenuButton').getAttribute('aria-expanded') === 'false'");
+    pass("저장 아이콘으로 저장 상태·백업·복원·초기화 기능 팝업을 열고 닫는다");
+
     await page.evaluate(`(() => {
       const mine = document.getElementById('mineButton');
       for (let index = 0; index < 10; index += 1) mine.click();
@@ -221,16 +290,21 @@ async function run() {
         level: save.data.upgrades.worn_pickaxe,
         currency: save.data.currency,
         firstAchievement: save.data.unlockedAchievements.first_click,
-        clickPower: document.getElementById('perClickValue').textContent
+        clickPower: document.getElementById('perClickValue').textContent,
+        achievementBadge: document.getElementById('achievementMenuBadge').textContent,
+        achievementMenuLabel: document.getElementById('achievementsMenuButton').getAttribute('aria-label')
       };
     })()`);
     assert(progressed.clicks === 13 && progressed.level === 1, "클릭 또는 업그레이드 진행도가 올바르지 않습니다.");
     assert(progressed.currency === 6 && progressed.firstAchievement > 0, "재화 또는 첫 업적 계산이 올바르지 않습니다.");
     assert(progressed.clickPower === "2", "클릭 업그레이드 효과가 화면에 반영되지 않았습니다.");
+    assert(progressed.achievementBadge === "1" && progressed.achievementMenuLabel.includes("1개 해금"), "업적 해금 수가 상단 메뉴에 반영되지 않았습니다.");
     pass("클릭, 구매, 업적 해금, 수동 저장이 일관된 상태를 만든다");
 
+    await page.evaluate("document.getElementById('saveMenuButton').click(); true");
+    await waitFor(page, "document.getElementById('saveManagementDialog').open");
     await page.evaluate("document.getElementById('exportButton').click(); true");
-    await waitFor(page, "document.getElementById('exportDialog').open && document.getElementById('exportCode').value.startsWith('PIXELMINE-V1:')");
+    await waitFor(page, "document.getElementById('saveManagementDialog').open && document.getElementById('exportDialog').open && document.getElementById('exportCode').value.startsWith('PIXELMINE-V1:')");
     const saveCode = await page.evaluate("document.getElementById('exportCode').value");
     const decoded = JSON.parse(Buffer.from(saveCode.slice("PIXELMINE-V1:".length), "base64").toString("utf8"));
     assert(decoded.version === 1 && decoded.meta.label === "픽셀 광산", "UTF-8 세이브 코드가 한글 메타데이터를 보존하지 못했습니다.");
@@ -448,14 +522,20 @@ async function run() {
       mobile: true,
     });
     await delay(100);
+    await page.evaluate("document.getElementById('saveMenuButton').click(); true");
+    await waitFor(page, "document.getElementById('saveManagementDialog').open");
     const mobileLayout = await page.evaluate(`(() => ({
       viewport: window.innerWidth,
       scrollWidth: document.documentElement.scrollWidth,
       mineWidth: document.getElementById('mineButton').getBoundingClientRect().width,
-      resetButtons: getComputedStyle(document.querySelector('.save-actions')).gridTemplateColumns
+      resetButtons: getComputedStyle(document.querySelector('.save-actions')).gridTemplateColumns,
+      menuRight: document.querySelector('.utility-menu').getBoundingClientRect().right,
+      dialogWidth: document.getElementById('saveManagementDialog').getBoundingClientRect().width
     }))()`);
     assert(mobileLayout.scrollWidth <= mobileLayout.viewport, `모바일 화면에 가로 오버플로가 있습니다: ${JSON.stringify(mobileLayout)}`);
     assert(mobileLayout.mineWidth < mobileLayout.viewport, "모바일 광맥 버튼이 뷰포트를 벗어났습니다.");
+    assert(mobileLayout.menuRight <= mobileLayout.viewport && mobileLayout.dialogWidth <= mobileLayout.viewport, "모바일 아이콘 메뉴 또는 기능 팝업이 뷰포트를 벗어났습니다.");
+    await page.evaluate("document.getElementById('saveManagementDialog').close(); true");
     await page.evaluate("window.scrollTo(0, 0); true");
     await delay(3_800);
     const mobileScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });

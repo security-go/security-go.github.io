@@ -209,6 +209,9 @@
       "sessionWarning",
       "saveIndicator",
       "manualSaveButton",
+      "achievementsMenuButton",
+      "achievementMenuBadge",
+      "saveMenuButton",
       "currencyValue",
       "perClickValue",
       "perSecondValue",
@@ -232,6 +235,8 @@
       "resetOpenButton",
       "reducedMotionToggle",
       "toastRegion",
+      "achievementsDialog",
+      "saveManagementDialog",
       "offlineDialog",
       "offlineDuration",
       "offlineReward",
@@ -260,6 +265,15 @@
       showToast(saved ? "현재 진행도를 저장했습니다." : "로컬 저장에 실패했습니다.", !saved);
       void refreshStorageEstimate();
     });
+    dom.achievementsMenuButton.addEventListener("click", () => {
+      renderAchievements();
+      openDialog(dom.achievementsDialog);
+    });
+    dom.saveMenuButton.addEventListener("click", () => {
+      renderSaveDetails();
+      openDialog(dom.saveManagementDialog);
+      void refreshStorageEstimate();
+    });
     dom.persistenceButton.addEventListener("click", () => {
       void requestPersistenceFromGesture(false);
     });
@@ -276,6 +290,13 @@
 
     document.querySelectorAll("[data-close-dialog]").forEach((button) => {
       button.addEventListener("click", () => closeDialog(document.getElementById(button.dataset.closeDialog)));
+    });
+
+    document.querySelectorAll("dialog").forEach((dialog) => {
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) closeDialog(dialog);
+      });
+      dialog.addEventListener("close", () => syncDialogTrigger(dialog, false));
     });
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -1009,6 +1030,11 @@
       elements.time.textContent = unlocked ? formatDateTime(unlockedAt) : "미해금";
     }
     dom.achievementCount.textContent = `${count} / ${ACHIEVEMENT_DEFINITIONS.length}`;
+    dom.achievementMenuBadge.textContent = String(count);
+    dom.achievementsMenuButton.setAttribute(
+      "aria-label",
+      `업적 기록 열기, ${count}개 해금`,
+    );
   }
 
   function renderSaveDetails() {
@@ -1399,12 +1425,21 @@
     if (!dialog || dialog.open) return;
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
+    syncDialogTrigger(dialog, true);
   }
 
   function closeDialog(dialog) {
     if (!dialog || !dialog.open) return;
     if (typeof dialog.close === "function") dialog.close();
     else dialog.removeAttribute("open");
+    syncDialogTrigger(dialog, false);
+  }
+
+  function syncDialogTrigger(dialog, expanded) {
+    const triggerId = dialog?.dataset.trigger;
+    if (!triggerId) return;
+    const trigger = document.getElementById(triggerId);
+    if (trigger) trigger.setAttribute("aria-expanded", String(expanded));
   }
 
   function setDialogStatus(element, message, error) {
