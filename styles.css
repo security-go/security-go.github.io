@@ -155,97 +155,114 @@ input:focus-visible {
   display: grid;
   overflow-y: auto;
   place-items: center;
-  padding: 28px 16px 40px;
+  padding: clamp(10px, 2vw, 24px);
   background:
-    linear-gradient(rgba(23, 32, 42, 0.92), rgba(23, 32, 42, 0.96)),
-    repeating-linear-gradient(0deg, transparent 0 12px, rgba(214, 180, 90, 0.1) 12px 16px);
+    radial-gradient(circle at 50% 45%, rgba(61, 89, 97, 0.42), transparent 55%),
+    var(--ink);
 }
 
-.start-card {
+.start-hero {
   position: relative;
-  width: min(660px, 100%);
-  padding: 38px clamp(20px, 5vw, 48px) 34px;
+  isolation: isolate;
+  display: grid;
+  width: min(1280px, 100%);
+  min-height: min(760px, calc(100svh - 32px));
+  overflow: hidden;
+  border: 4px solid var(--ink);
+  place-items: stretch;
+  background: var(--cave);
+  box-shadow: 12px 12px 0 #0d141a;
   text-align: center;
 }
 
-.start-card::before,
-.start-card::after {
+.start-hero::before {
   position: absolute;
-  width: 16px;
-  height: 16px;
+  z-index: -1;
+  inset: 0;
   content: "";
-  background: var(--ore);
-  box-shadow: 0 0 0 4px var(--ink);
+  background:
+    linear-gradient(180deg, rgba(13, 20, 26, 0.35) 0%, transparent 32%, rgba(13, 20, 26, 0.18) 58%, rgba(13, 20, 26, 0.76) 100%),
+    radial-gradient(circle at 50% 38%, transparent 10%, rgba(13, 20, 26, 0.12) 48%, rgba(13, 20, 26, 0.62) 100%);
 }
 
-.start-card::before {
-  top: 12px;
-  left: 12px;
-}
-
-.start-card::after {
-  right: 12px;
-  bottom: 12px;
-}
-
-.logo-block {
-  position: relative;
-  width: 76px;
-  height: 44px;
-  margin: 0 auto 18px;
-}
-
-.logo-pixel {
+.start-hero::after {
   position: absolute;
-  display: block;
-  width: 20px;
-  height: 20px;
-  border: 4px solid var(--ink);
-  background: var(--gold);
+  z-index: -1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 5px, rgba(23, 32, 42, 0.08) 5px 7px);
 }
 
-.logo-pixel--one {
-  left: 0;
-  bottom: 0;
+.start-hero-image {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  image-rendering: pixelated;
 }
 
-.logo-pixel--two {
-  top: 0;
-  left: 28px;
-  background: var(--ore);
+.start-hero-content {
+  display: flex;
+  min-height: inherit;
+  align-items: center;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(24px, 5vw, 58px);
 }
 
-.logo-pixel--three {
-  right: 0;
-  bottom: 0;
-  background: var(--moss);
+.start-brand {
+  width: min(600px, 100%);
+  margin-top: clamp(12px, 2.5vh, 28px);
+  padding: clamp(16px, 3vw, 26px);
+  border: 3px solid rgba(243, 231, 197, 0.68);
+  color: var(--cream);
+  background: rgba(23, 32, 42, 0.76);
+  box-shadow: 7px 7px 0 rgba(13, 20, 26, 0.9);
+  backdrop-filter: blur(2px);
+}
+
+.start-brand .eyebrow {
+  color: var(--ore);
 }
 
 .game-title {
   margin: 0;
-  color: var(--ink);
+  color: var(--cream);
   font-family: var(--font-pixel);
   font-size: clamp(2.1rem, 9vw, 4rem);
   line-height: 1.35;
   letter-spacing: 0.04em;
-  text-shadow: 5px 5px 0 var(--gold);
+  text-shadow: 5px 5px 0 var(--ink), 8px 8px 0 rgba(214, 180, 90, 0.75);
 }
 
 .start-subtitle {
-  margin: 14px 0 22px;
+  margin: 14px 0 0;
+  color: var(--cream);
   font-size: 1.05rem;
   font-weight: 900;
+  text-shadow: 2px 2px 0 var(--ink);
 }
 
-.protocol-row {
+.start-action-panel {
+  width: min(390px, 100%);
+  padding: 15px;
+  border: 3px solid var(--cream);
+  color: var(--cream);
+  background: rgba(23, 32, 42, 0.86);
+  box-shadow: 7px 7px 0 rgba(13, 20, 26, 0.92);
+}
+
+.start-protocol-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 0 18px;
-  padding: 10px 12px;
-  border: 3px solid var(--ink);
-  background: var(--paper);
+  margin-bottom: 12px;
+  font-size: 0.78rem;
 }
 
 .protocol-label {
@@ -280,11 +297,6 @@ input:focus-visible {
   text-align: left;
 }
 
-.storage-warning h2 {
-  margin: 0 0 8px;
-  font-size: 1.1rem;
-}
-
 .storage-warning p {
   margin: 0 0 8px;
 }
@@ -299,24 +311,47 @@ input:focus-visible {
 }
 
 .start-status {
-  min-height: 26px;
-  margin: 18px 0 12px;
+  min-height: 1.5em;
+  margin: 10px 0 0;
+  color: var(--cream);
+  font-size: 0.76rem;
   font-weight: 800;
 }
 
 .start-status.is-error {
-  color: var(--danger);
+  color: #ff9a8b;
 }
 
 .start-button {
   width: 100%;
-  min-height: 56px;
+  min-height: 60px;
+  font-family: var(--font-pixel);
+  font-size: 0.78rem;
 }
 
 .start-footnote {
   margin: 16px 0 0;
   color: var(--slate);
   font-size: 0.78rem;
+}
+
+.start-dialog-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.start-dialog-actions .pixel-button {
+  min-height: 52px;
+}
+
+.start-storage-content .start-dialog-status {
+  margin: 14px 0 0;
+}
+
+.start-storage-content .start-footnote {
+  margin: 16px 0 0;
 }
 
 .game-shell {
@@ -984,6 +1019,16 @@ input:focus-visible {
   width: min(960px, calc(100% - 28px));
 }
 
+.pixel-dialog.start-storage-dialog {
+  width: min(680px, calc(100% - 28px));
+}
+
+.start-storage-content h2 {
+  max-width: 560px;
+  font-size: clamp(1.25rem, 4vw, 1.7rem);
+  line-height: 1.45;
+}
+
 .pixel-dialog::backdrop {
   background: rgba(23, 32, 42, 0.82);
   backdrop-filter: blur(2px);
@@ -1159,6 +1204,47 @@ body.reduce-motion *::after {
 @media (max-width: 620px) {
   :root {
     --panel-shadow: 5px 5px 0 var(--ink);
+  }
+
+  .start-overlay {
+    padding: 8px;
+  }
+
+  .start-hero {
+    min-height: calc(100svh - 16px);
+    border-width: 3px;
+    box-shadow: 6px 6px 0 #0d141a;
+  }
+
+  .start-hero-content {
+    padding: 20px 12px 18px;
+  }
+
+  .start-brand {
+    width: calc(100% - 8px);
+    padding: 16px 10px;
+    border-width: 2px;
+  }
+
+  .game-title {
+    font-size: clamp(2rem, 13vw, 3.2rem);
+  }
+
+  .start-subtitle {
+    font-size: 0.88rem;
+  }
+
+  .start-action-panel {
+    width: calc(100% - 8px);
+    padding: 12px;
+  }
+
+  .start-dialog-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .start-storage-content {
+    padding: 22px 16px;
   }
 
   .game-shell {

@@ -18,40 +18,69 @@
   </noscript>
 
   <div id="startOverlay" class="start-overlay" role="dialog" aria-modal="true" aria-labelledby="startTitle">
-    <section class="start-card pixel-panel">
-      <div class="logo-block" aria-hidden="true">
-        <span class="logo-pixel logo-pixel--one"></span>
-        <span class="logo-pixel logo-pixel--two"></span>
-        <span class="logo-pixel logo-pixel--three"></span>
-      </div>
-      <p class="eyebrow">LOCAL IDLE CLICKER</p>
-      <h1 id="startTitle" class="game-title">PIXEL<br>MINE</h1>
-      <p class="start-subtitle">로그인 없이 시작하는 나만의 픽셀 광산</p>
+    <section class="start-hero">
+      <img
+        class="start-hero-image"
+        src="assets/pixel-mine-start-hero.png"
+        width="1672"
+        height="941"
+        alt=""
+        fetchpriority="high"
+        decoding="async"
+      >
+      <div class="start-hero-content">
+        <div class="start-brand">
+          <p class="eyebrow">LOCAL IDLE CLICKER</p>
+          <h1 id="startTitle" class="game-title">PIXEL<br>MINE</h1>
+          <p class="start-subtitle">로그인 없이 시작하는 나만의 픽셀 광산</p>
+        </div>
 
-      <div class="protocol-row">
-        <span class="protocol-label">접속 상태</span>
-        <strong id="protocolStatus" class="status-chip">확인 중</strong>
+        <div class="start-action-panel">
+          <div class="start-protocol-row">
+            <span class="protocol-label">접속 상태</span>
+            <strong id="protocolStatus" class="status-chip">확인 중</strong>
+          </div>
+          <button
+            id="startButton"
+            class="pixel-button pixel-button--primary start-button"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="startStorageDialog"
+            aria-expanded="false"
+            disabled
+          >게임 시작</button>
+          <p id="startStatus" class="start-status" aria-live="polite"></p>
+        </div>
       </div>
-
-      <div class="storage-warning" role="note" aria-label="저장 안내">
-        <h2>저장 안내</h2>
-        <p>진행 상황은 서버가 아닌 <strong>현재 브라우저의 로컬 저장소</strong>에만 저장됩니다.</p>
-        <ul>
-          <li>브라우저 데이터 삭제, 시크릿 모드, 기기 변경 시 저장이 사라질 수 있습니다.</li>
-          <li>저장 공간 정책이나 Safari/WebKit의 장기 미사용 정책으로 삭제될 수 있습니다.</li>
-          <li>게임 안의 <strong>세이브 코드 내보내기</strong>로 정기적으로 백업해주세요.</li>
-        </ul>
-      </div>
-
-      <p id="startStatus" class="start-status" aria-live="polite">
-        아래 버튼을 누르면 로컬 세이브를 불러오고 게임을 시작합니다.
-      </p>
-      <button id="startButton" class="pixel-button pixel-button--primary start-button" type="button" disabled>
-        저장 안내를 확인하고 게임 시작
-      </button>
-      <p class="start-footnote">영구 저장소 요청이 거절되어도 게임은 시작할 수 있으며, 영구 보존을 보장하지 않습니다.</p>
     </section>
   </div>
+
+  <dialog
+    id="startStorageDialog"
+    class="pixel-dialog start-storage-dialog"
+    aria-labelledby="startStorageHeading"
+    data-trigger="startButton"
+  >
+    <div class="dialog-content start-storage-content">
+      <p class="eyebrow">LOCAL SAVE NOTICE</p>
+      <h2 id="startStorageHeading">광산 기록은 이 브라우저에 저장됩니다</h2>
+      <div class="storage-warning" role="note" aria-label="로컬 저장 및 백업 안내">
+        <p>게임 진행 내용은 계정이나 서버가 아닌 <strong>현재 브라우저의 로컬 저장소</strong>에만 저장됩니다.</p>
+        <ul>
+          <li>브라우저 데이터 삭제, 시크릿 모드, 기기 변경 시 진행 내용이 사라질 수 있습니다.</li>
+          <li>게임을 시작한 뒤 우측 상단 저장·백업 메뉴에서 세이브 코드를 <strong>정기적으로 내보내 보관</strong>해주세요.</li>
+        </ul>
+      </div>
+      <p id="startDialogStatus" class="dialog-status start-dialog-status" aria-live="polite">
+        기존 로컬 세이브는 게임 시작 시 자동으로 확인합니다.
+      </p>
+      <div class="start-dialog-actions">
+        <button id="confirmStartButton" class="pixel-button pixel-button--primary" type="button">게임 시작</button>
+        <button id="startImportButton" class="pixel-button" type="button">세이브 불러오기</button>
+      </div>
+      <p class="start-footnote">저장 보호가 승인되어도 사용자가 사이트 데이터를 삭제하면 세이브가 사라질 수 있습니다.</p>
+    </div>
+  </dialog>
 
   <main id="gameApp" class="game-shell is-hidden" aria-hidden="true">
     <header class="topbar pixel-panel">
@@ -304,7 +333,7 @@
     <div class="dialog-content">
       <p class="eyebrow">RESTORE SAVE</p>
       <h2>세이브 코드 불러오기</h2>
-      <p>검증이 완료된 코드만 현재 진행도를 대체합니다. 불러오기 전에 현재 세이브를 내보내는 것을 권장합니다.</p>
+      <p id="importDialogDescription">검증이 완료된 코드만 현재 진행도를 대체합니다. 불러오기 전에 현재 세이브를 내보내는 것을 권장합니다.</p>
       <label class="field-label" for="importCode">세이브 코드 붙여넣기</label>
       <textarea id="importCode" class="save-code-field" rows="8" spellcheck="false" autocomplete="off" placeholder="PIXELMINE-V1:..."></textarea>
       <p id="importStatus" class="dialog-status" aria-live="polite"></p>

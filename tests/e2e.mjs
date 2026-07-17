@@ -9,6 +9,9 @@ const PROJECT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const FILE_URL = pathToFileURL(resolve(PROJECT_DIR, "index.html")).href;
 const SCREENSHOT_PATH = process.env.PIXEL_MINE_SCREENSHOT ?? "/tmp/pixel-mine-e2e.png";
 const START_SCREENSHOT_PATH = "/tmp/pixel-mine-start.png";
+const START_NOTICE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-notice.png";
+const START_MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-mobile.png";
+const START_NOTICE_MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-notice-mobile.png";
 const MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-mobile.png";
 const ACHIEVEMENTS_SCREENSHOT_PATH = "/tmp/pixel-mine-achievements.png";
 const SAVE_MENU_SCREENSHOT_PATH = "/tmp/pixel-mine-save-menu.png";
@@ -129,6 +132,16 @@ async function reload(session) {
   );
 }
 
+async function openStartNotice(session) {
+  await session.evaluate("document.getElementById('startButton').click(); true");
+  await waitFor(session, "document.getElementById('startStorageDialog').open", 8_000);
+}
+
+async function startGame(session) {
+  await openStartNotice(session);
+  await session.evaluate("document.getElementById('confirmStartButton').click(); true");
+}
+
 async function createPage(url = "about:blank") {
   const response = await fetch(`${DEBUG_BASE}/json/new?${encodeURIComponent(url)}`, { method: "PUT" });
   if (!response.ok) throw new Error(`Chrome target 생성 실패: HTTP ${response.status}`);
@@ -165,21 +178,47 @@ async function run() {
     await page.evaluate("localStorage.clear(); true");
     await reload(page);
 
+    await waitFor(page, "document.querySelector('.start-hero-image')?.complete && document.querySelector('.start-hero-image')?.naturalWidth > 0");
+    await page.evaluate("document.querySelector('.start-hero-image').decode().then(() => true)");
+    await delay(100);
     const initial = await page.evaluate(`(() => ({
       overlayVisible: !document.getElementById('startOverlay').classList.contains('is-hidden'),
       appHidden: document.getElementById('gameApp').classList.contains('is-hidden'),
       startEnabled: !document.getElementById('startButton').disabled,
-      notice: document.querySelector('.storage-warning').textContent,
+      heroImageWidth: document.querySelector('.start-hero-image').naturalWidth,
+      overlayButtons: document.querySelectorAll('#startOverlay button').length,
+      noticeClosed: !document.getElementById('startStorageDialog').open,
       saveBeforeStart: localStorage.getItem('pixelMine.save')
     }))()`);
     assert(initial.overlayVisible && initial.appHidden && initial.startEnabled, "HTTP 최초 시작 게이트 상태가 올바르지 않습니다.");
-    assert(initial.notice.includes("로컬 저장소") && initial.notice.includes("삭제될 수 있습니다"), "저장 삭제 가능성 안내가 없습니다.");
+    assert(initial.heroImageWidth > 0 && initial.overlayButtons === 1 && initial.noticeClosed, "이미지 시작 화면 또는 단일 시작 버튼 구성이 올바르지 않습니다.");
     assert(initial.saveBeforeStart === null, "시작 버튼 전에 세이브를 만들었습니다.");
     const startScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
     await writeFile(START_SCREENSHOT_PATH, Buffer.from(startScreenshot.data, "base64"));
-    pass("HTTP 최초 화면은 저장 안내와 활성 게임 시작 버튼을 먼저 표시한다");
+    pass("HTTP 최초 화면은 전용 광산 이미지 위에 활성 게임 시작 버튼 하나만 표시한다");
 
-    await page.evaluate("document.getElementById('startButton').click(); true");
+    await openStartNotice(page);
+    const startNotice = await page.evaluate(`(() => ({
+      text: document.querySelector('#startStorageDialog .storage-warning').textContent,
+      buttons: [...document.querySelectorAll('#startStorageDialog .start-dialog-actions button')].map((button) => button.textContent.trim()),
+      appHidden: document.getElementById('gameApp').classList.contains('is-hidden'),
+      saveBeforeConfirm: localStorage.getItem('pixelMine.save'),
+      expanded: document.getElementById('startButton').getAttribute('aria-expanded')
+    }))()`);
+    assert(
+      startNotice.text.includes("현재 브라우저의 로컬 저장소") && startNotice.text.includes("정기적으로"),
+      "로컬 저장과 정기 백업 안내가 시작 팝업에 없습니다.",
+    );
+    assert(
+      JSON.stringify(startNotice.buttons) === JSON.stringify(["게임 시작", "세이브 불러오기"]),
+      `시작 팝업 버튼 구성이 올바르지 않습니다: ${JSON.stringify(startNotice.buttons)}`,
+    );
+    assert(startNotice.appHidden && startNotice.saveBeforeConfirm === null && startNotice.expanded === "true", "안내 팝업 확인 전에 게임 또는 저장이 시작되었습니다.");
+    const startNoticeScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(START_NOTICE_SCREENSHOT_PATH, Buffer.from(startNoticeScreenshot.data, "base64"));
+    pass("게임 시작 클릭 후 로컬 저장·정기 백업 안내와 두 개의 선택 버튼을 표시한다");
+
+    await page.evaluate("document.getElementById('confirmStartButton').click(); true");
     await waitFor(page, "!document.getElementById('gameApp').classList.contains('is-hidden') && Boolean(localStorage.getItem('pixelMine.save'))");
     await waitFor(page, `
       !document.getElementById('persistenceStatus').textContent.includes('확인 중') &&
@@ -383,7 +422,7 @@ async function run() {
       savedCurrency: JSON.parse(localStorage.getItem('pixelMine.save')).data.currency
     }))()`);
     assert(beforeResume.overlay && beforeResume.displayedCurrency === "0" && beforeResume.savedCurrency === 6, "새로고침 시 시작 버튼 전에 세이브를 화면에 적용했습니다.");
-    await page.evaluate("document.getElementById('startButton').click(); true");
+    await startGame(page);
     await waitFor(page, "!document.getElementById('gameApp').classList.contains('is-hidden')");
     const resumed = await page.evaluate(`(() => ({
       level: JSON.parse(localStorage.getItem('pixelMine.save')).data.upgrades.worn_pickaxe,
@@ -402,9 +441,9 @@ async function run() {
       save.data.lastProcessedAt = Date.now() - (48 * 60 * 60 * 1000);
       save.data.lastSavedAt = save.data.lastProcessedAt;
       localStorage.setItem('pixelMine.save', JSON.stringify(save));
-      document.getElementById('startButton').click();
       return true;
     })()`);
+    await startGame(page);
     await waitFor(page, "document.getElementById('offlineDialog').open");
     const offline = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
@@ -427,9 +466,9 @@ async function run() {
       save.data.stats.offlineEarned = 0;
       save.data.lastProcessedAt = Date.now() + (24 * 60 * 60 * 1000);
       localStorage.setItem('pixelMine.save', JSON.stringify(save));
-      document.getElementById('startButton').click();
       return true;
     })()`);
+    await startGame(page);
     await waitFor(page, "!document.getElementById('gameApp').classList.contains('is-hidden')");
     const reversedClock = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
@@ -462,9 +501,9 @@ async function run() {
     await reload(page);
     await page.evaluate(`(() => {
       localStorage.setItem('pixelMine.save', '{broken');
-      document.getElementById('startButton').click();
       return true;
     })()`);
+    await startGame(page);
     await waitFor(page, "!document.getElementById('gameApp').classList.contains('is-hidden') && Boolean(localStorage.getItem('pixelMine.corruptSave'))");
     const corrupt = await page.evaluate(`(() => ({
       quarantined: JSON.parse(localStorage.getItem('pixelMine.corruptSave')).raw,
@@ -490,9 +529,9 @@ async function run() {
       };
       save.data.lastProcessedAt = Date.now();
       localStorage.setItem('pixelMine.save', JSON.stringify(save));
-      document.getElementById('startButton').click();
       return true;
     })()`);
+    await startGame(page);
     await waitFor(page, "!document.getElementById('gameApp').classList.contains('is-hidden')");
     const desktopLayout = await page.evaluate(`(() => ({
       noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
@@ -506,13 +545,15 @@ async function run() {
 
     secondPage = await createPage(BASE_URL);
     await waitFor(secondPage, "document.getElementById('startButton') && !document.getElementById('startButton').disabled");
-    await secondPage.evaluate("document.getElementById('startButton').click(); true");
-    await waitFor(secondPage, "document.getElementById('startStatus').textContent.includes('다른 탭')");
+    await openStartNotice(secondPage);
+    await secondPage.evaluate("document.getElementById('confirmStartButton').click(); true");
+    await waitFor(secondPage, "document.getElementById('startDialogStatus').textContent.includes('다른 탭')");
     const tabBlocked = await secondPage.evaluate(`(() => ({
       overlay: !document.getElementById('startOverlay').classList.contains('is-hidden'),
-      appHidden: document.getElementById('gameApp').classList.contains('is-hidden')
+      appHidden: document.getElementById('gameApp').classList.contains('is-hidden'),
+      noticeOpen: document.getElementById('startStorageDialog').open
     }))()`);
-    assert(tabBlocked.overlay && tabBlocked.appHidden, "두 번째 탭의 활성 플레이를 차단하지 못했습니다.");
+    assert(tabBlocked.overlay && tabBlocked.appHidden && tabBlocked.noticeOpen, "두 번째 탭의 활성 플레이를 차단하지 못했습니다.");
     pass("같은 origin의 두 번째 탭에서 활성 플레이와 저장 충돌을 차단한다");
 
     await page.send("Emulation.setDeviceMetricsOverride", {
@@ -551,15 +592,91 @@ async function run() {
     assert(fileGate.disabled && fileGate.guide.includes("python3 -m http.server 8000"), "file:// 실행 차단 또는 HTTP 안내가 없습니다.");
     pass("file:// 접근을 차단하고 로컬 HTTP 서버 실행 방법을 안내한다");
 
+    await secondPage.send("Emulation.setDeviceMetricsOverride", {
+      width: 375,
+      height: 812,
+      deviceScaleFactor: 2,
+      mobile: true,
+    });
+    await navigate(secondPage, "http://localhost:8000/");
+    await waitFor(secondPage, "document.getElementById('protocolStatus')?.classList.contains('is-good') && !document.getElementById('startButton').disabled", 8_000);
+    await secondPage.evaluate("localStorage.clear(); true");
+    await reload(secondPage);
+    await waitFor(secondPage, "document.querySelector('.start-hero-image')?.complete && document.querySelector('.start-hero-image')?.naturalWidth > 0");
+    const mobileStartLayout = await secondPage.evaluate(`(() => ({
+      viewport: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      heroWidth: document.querySelector('.start-hero').getBoundingClientRect().width,
+      buttons: document.querySelectorAll('#startOverlay button').length
+    }))()`);
+    assert(
+      mobileStartLayout.scrollWidth <= mobileStartLayout.viewport && mobileStartLayout.heroWidth <= mobileStartLayout.viewport && mobileStartLayout.buttons === 1,
+      `모바일 시작 화면 구성이 올바르지 않습니다: ${JSON.stringify(mobileStartLayout)}`,
+    );
+    const mobileStartScreenshot = await secondPage.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(START_MOBILE_SCREENSHOT_PATH, Buffer.from(mobileStartScreenshot.data, "base64"));
+    pass("375px 모바일에서도 이미지 시작 화면과 단일 시작 버튼이 가로 오버플로 없이 표시된다");
+
+    await openStartNotice(secondPage);
+    const mobileStartNoticeLayout = await secondPage.evaluate(`(() => {
+      const dialog = document.getElementById('startStorageDialog');
+      const buttons = [...dialog.querySelectorAll('.start-dialog-actions button')];
+      return {
+        viewport: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        dialogWidth: dialog.getBoundingClientRect().width,
+        buttons: buttons.length,
+        stacked: buttons.length === 2 && Math.abs(buttons[0].getBoundingClientRect().left - buttons[1].getBoundingClientRect().left) < 2
+      };
+    })()`);
+    assert(
+      mobileStartNoticeLayout.scrollWidth <= mobileStartNoticeLayout.viewport &&
+        mobileStartNoticeLayout.dialogWidth <= mobileStartNoticeLayout.viewport &&
+        mobileStartNoticeLayout.buttons === 2 &&
+        mobileStartNoticeLayout.stacked,
+      `모바일 시작 안내 팝업 구성이 올바르지 않습니다: ${JSON.stringify(mobileStartNoticeLayout)}`,
+    );
+    const mobileStartNoticeScreenshot = await secondPage.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(START_NOTICE_MOBILE_SCREENSHOT_PATH, Buffer.from(mobileStartNoticeScreenshot.data, "base64"));
+    pass("375px 모바일 시작 안내 팝업은 두 선택 버튼을 한 열로 표시한다");
+
+    await secondPage.evaluate(`(() => {
+      document.getElementById('startImportButton').click();
+      document.getElementById('importCode').value = ${JSON.stringify(saveCode)};
+      document.getElementById('confirmImportButton').click();
+      return true;
+    })()`);
+    await waitFor(secondPage, "!document.getElementById('importDialog').open && document.getElementById('startDialogStatus').textContent.includes('검증이 완료')");
+    const stagedStartImport = await secondPage.evaluate(`(() => ({
+      localSave: localStorage.getItem('pixelMine.save'),
+      appHidden: document.getElementById('gameApp').classList.contains('is-hidden'),
+      noticeOpen: document.getElementById('startStorageDialog').open,
+      confirmLabel: document.getElementById('confirmStartButton').textContent.trim()
+    }))()`);
+    assert(
+      stagedStartImport.localSave === null && stagedStartImport.appHidden && stagedStartImport.noticeOpen && stagedStartImport.confirmLabel.includes("불러온 세이브"),
+      `시작 전 세이브 검증이 로컬 저장을 변경했거나 대기 상태가 잘못되었습니다: ${JSON.stringify(stagedStartImport)}`,
+    );
+    pass("시작 전 세이브 불러오기는 검증 결과만 대기시키고 기존 로컬 세이브를 변경하지 않는다");
+
+    await secondPage.evaluate("document.getElementById('confirmStartButton').click(); true");
+    await waitFor(secondPage, "!document.getElementById('gameApp').classList.contains('is-hidden') && Boolean(localStorage.getItem('pixelMine.save'))");
+    const startedFromImport = await secondPage.evaluate(`(() => ({
+      shown: document.getElementById('currencyValue').textContent,
+      saved: JSON.parse(localStorage.getItem('pixelMine.save')).data.currency
+    }))()`);
+    assert(startedFromImport.shown === "6" && startedFromImport.saved === 6, `시작 전 세이브를 게임 시작 시 적용하지 못했습니다: ${JSON.stringify(startedFromImport)}`);
+    pass("다중 탭 확인을 통과한 게임 시작 시 대기 중인 세이브를 적용하고 저장한다");
+
     await navigate(secondPage, BASE_URL);
     await waitFor(secondPage, "document.getElementById('protocolStatus')?.classList.contains('is-good') && !document.getElementById('startButton').disabled", 8_000);
     await secondPage.evaluate(`(() => {
       Storage.prototype.setItem = function blockedSetItem() {
         throw new DOMException('Storage blocked for test', 'SecurityError');
       };
-      document.getElementById('startButton').click();
       return true;
     })()`);
+    await startGame(secondPage);
     await waitFor(secondPage, "!document.getElementById('gameApp').classList.contains('is-hidden')");
     const memoryFallback = await secondPage.evaluate(`(() => ({
       storage: document.getElementById('localStorageStatus').textContent,

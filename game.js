@@ -181,6 +181,8 @@
   let state = null;
   let sessionStarted = false;
   let sessionBlocked = false;
+  let importContext = "inGame";
+  let pendingStartImport = null;
   let pageIsHiding = false;
   let gameTickTimer = null;
   let autosaveTimer = null;
@@ -205,6 +207,10 @@
       "protocolStatus",
       "startStatus",
       "startButton",
+      "startStorageDialog",
+      "startDialogStatus",
+      "confirmStartButton",
+      "startImportButton",
       "gameApp",
       "sessionWarning",
       "saveIndicator",
@@ -245,6 +251,7 @@
       "copyStatus",
       "copyExportButton",
       "importDialog",
+      "importDialogDescription",
       "importCode",
       "importStatus",
       "confirmImportButton",
@@ -258,7 +265,9 @@
   }
 
   function bindEvents() {
-    dom.startButton.addEventListener("click", handleStart);
+    dom.startButton.addEventListener("click", openStartStorageDialog);
+    dom.confirmStartButton.addEventListener("click", handleStart);
+    dom.startImportButton.addEventListener("click", () => openImportDialog("start"));
     dom.mineButton.addEventListener("click", handleMineClick);
     dom.manualSaveButton.addEventListener("click", () => {
       const saved = saveGame("수동 저장");
@@ -279,7 +288,7 @@
     });
     dom.exportButton.addEventListener("click", openExportDialog);
     dom.copyExportButton.addEventListener("click", copyExportCode);
-    dom.importOpenButton.addEventListener("click", openImportDialog);
+    dom.importOpenButton.addEventListener("click", () => openImportDialog("inGame"));
     dom.confirmImportButton.addEventListener("click", importSaveCode);
     dom.resetOpenButton.addEventListener("click", openResetDialog);
     dom.resetConfirm.addEventListener("change", () => {
@@ -329,26 +338,39 @@
     return window.location.protocol === "http:" || window.location.protocol === "https:";
   }
 
+  function openStartStorageDialog() {
+    if (!isSupportedProtocol()) return;
+    if (pendingStartImport) {
+      setStartDialogStatus("불러온 세이브가 준비되었습니다. 게임 시작을 누르면 안전하게 적용합니다.", false);
+      dom.confirmStartButton.textContent = "불러온 세이브로 게임 시작";
+    } else if (!sessionBlocked) {
+      setStartDialogStatus("기존 로컬 세이브는 게임 시작 시 자동으로 확인합니다.", false);
+      dom.confirmStartButton.textContent = "게임 시작";
+    }
+    openDialog(dom.startStorageDialog);
+  }
+
   function handleStart() {
     if (!isSupportedProtocol() || sessionStarted) return;
 
-    dom.startButton.disabled = true;
-    dom.startStatus.classList.remove("is-error");
-    dom.startStatus.textContent = "로컬 저장소와 기존 광산을 확인하는 중입니다...";
+    dom.confirmStartButton.disabled = true;
+    setStartDialogStatus("로컬 저장소와 기존 광산을 확인하는 중입니다...", false);
 
     const persistenceRequest = requestPersistenceFromGesture(true);
     probeLocalStorage();
 
     if (!acquireTabLease()) {
-      dom.startStatus.textContent = "다른 탭에서 PIXEL MINE이 실행 중입니다. 기존 탭을 닫고 잠시 후 다시 시도하세요.";
-      dom.startStatus.classList.add("is-error");
-      dom.startButton.textContent = "탭 상태 다시 확인";
-      dom.startButton.disabled = false;
+      setStartDialogStatus("다른 탭에서 PIXEL MINE이 실행 중입니다. 기존 탭을 닫고 잠시 후 다시 시도하세요.", true);
+      dom.confirmStartButton.textContent = "탭 상태 다시 확인";
+      dom.confirmStartButton.disabled = false;
       void persistenceRequest;
       return;
     }
 
-    const loadResult = loadGameState();
+    const loadResult = pendingStartImport
+      ? { data: pendingStartImport, warning: "불러온 세이브로 광산을 시작했습니다.", isError: false }
+      : loadGameState();
+    pendingStartImport = null;
     state = loadResult.data;
     sessionStarted = true;
     sessionBlocked = false;
@@ -360,6 +382,7 @@
     evaluateAchievements(true);
     renderAll();
 
+    closeDialog(dom.startStorageDialog);
     dom.startOverlay.classList.add("is-hidden");
     dom.gameApp.classList.remove("is-hidden");
     dom.gameApp.setAttribute("aria-hidden", "false");
@@ -380,6 +403,8 @@
     if (loadResult.warning) showToast(loadResult.warning, loadResult.isError);
     if (shouldShowOfflineReward(offlineResult)) showOfflineReward(offlineResult);
 
+    dom.confirmStartButton.disabled = false;
+    dom.confirmStartButton.textContent = "게임 시작";
     window.setTimeout(() => dom.mineButton.focus(), 80);
   }
 
@@ -752,8 +777,12 @@
     dom.startOverlay.classList.remove("is-hidden");
     dom.startStatus.textContent = "다른 탭이 활성 플레이 권한을 가져갔습니다. 진행도 충돌을 막기 위해 이 탭을 중지했습니다. 다른 탭을 닫고 다시 확인하세요.";
     dom.startStatus.classList.add("is-error");
-    dom.startButton.textContent = "탭 상태 다시 확인";
     dom.startButton.disabled = false;
+    document.querySelectorAll("dialog[open]").forEach((dialog) => closeDialog(dialog));
+    setStartDialogStatus("다른 탭에서 PIXEL MINE이 실행 중입니다. 기존 탭을 닫고 잠시 후 다시 시도하세요.", true);
+    dom.confirmStartButton.textContent = "탭 상태 다시 확인";
+    dom.confirmStartButton.disabled = false;
+    openDialog(dom.startStorageDialog);
   }
 
   function startSessionTimers() {
@@ -1244,10 +1273,15 @@
     }
   }
 
-  function openImportDialog() {
+  function openImportDialog(context = "inGame") {
+    importContext = context;
     dom.importCode.value = "";
     dom.importStatus.textContent = "";
     dom.importStatus.className = "dialog-status";
+    dom.importDialogDescription.textContent = context === "start"
+      ? "세이브 코드를 검증해 시작 준비에 적용합니다. 실제 로컬 저장은 다중 탭 확인을 거쳐 게임을 시작할 때 수행합니다."
+      : "검증이 완료된 코드만 현재 진행도를 대체합니다. 불러오기 전에 현재 세이브를 내보내는 것을 권장합니다.";
+    dom.confirmImportButton.textContent = context === "start" ? "검증하고 준비" : "검증 후 불러오기";
     openDialog(dom.importDialog);
     window.setTimeout(() => dom.importCode.focus(), 50);
   }
@@ -1260,6 +1294,16 @@
     try {
       const migrated = decodeSaveCode(input);
       const importedData = validateSaveData(migrated.data);
+
+      if (importContext === "start") {
+        pendingStartImport = importedData;
+        closeDialog(dom.importDialog);
+        setStartDialogStatus("세이브 검증이 완료되었습니다. 게임 시작을 누르면 불러온 진행도로 시작합니다.", false);
+        dom.confirmStartButton.textContent = "불러온 세이브로 게임 시작";
+        showToast("세이브 코드를 확인했습니다. 게임 시작 전까지 로컬 저장은 변경하지 않습니다.");
+        return;
+      }
+
       const offlineResult = advanceDataTo(importedData, Date.now(), true);
 
       state = importedData;
@@ -1445,6 +1489,11 @@
   function setDialogStatus(element, message, error) {
     element.textContent = message;
     element.className = `dialog-status ${error ? "is-error" : "is-success"}`;
+  }
+
+  function setStartDialogStatus(message, error) {
+    dom.startDialogStatus.textContent = message;
+    dom.startDialogStatus.className = `dialog-status start-dialog-status ${error ? "is-error" : "is-success"}`;
   }
 
   function showToast(message, error = false) {
