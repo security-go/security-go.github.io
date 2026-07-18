@@ -248,13 +248,21 @@ async function run() {
 
     const featureNavigation = await page.evaluate(`(() => {
       const gameApp = document.getElementById('gameApp');
+      const topbar = document.querySelector('.topbar');
       const achievementList = document.getElementById('achievementList');
       const saveActions = document.querySelector('.save-actions');
       const achievementButton = document.getElementById('achievementsMenuButton');
       const saveButton = document.getElementById('saveMenuButton');
+      const saveDialog = document.getElementById('saveManagementDialog');
       return {
         achievementOutsideGame: !gameApp.contains(achievementList),
         saveOutsideGame: !gameApp.contains(saveActions),
+        coreStatsInTopbar: ['currencyValue', 'perClickValue', 'perSecondValue'].every((id) => topbar.contains(document.getElementById(id))),
+        legacyStatsRemoved: !document.querySelector('.stats-grid') && !document.querySelector('.stat-card'),
+        visibleBrandRemoved: !topbar.querySelector('.topbar-title, .topbar-korean, .eyebrow'),
+        accessibleTitle: Boolean(topbar.querySelector('h1.visually-hidden')),
+        manualSaveMoved: !topbar.contains(document.getElementById('manualSaveButton')) && saveDialog.contains(document.getElementById('manualSaveButton')),
+        summaryOrder: [...document.querySelectorAll('.mine-summary > span:not(.mine-summary-separator)')].map((item) => item.textContent.trim()),
         menuButtons: document.querySelectorAll('.utility-menu-button').length,
         achievementControls: achievementButton.getAttribute('aria-controls'),
         saveControls: saveButton.getAttribute('aria-controls'),
@@ -272,6 +280,22 @@ async function run() {
       "상단 아이콘 메뉴와 다이얼로그 연결이 올바르지 않습니다.",
     );
     pass("업적과 저장 기능을 게임 본문에서 분리하고 상단 아이콘 메뉴 두 개에 연결한다");
+    assert(
+      featureNavigation.coreStatsInTopbar &&
+        featureNavigation.legacyStatsRemoved &&
+        featureNavigation.visibleBrandRemoved &&
+        featureNavigation.accessibleTitle &&
+        featureNavigation.manualSaveMoved,
+      `컴팩트 상단 구조가 올바르지 않습니다: ${JSON.stringify(featureNavigation)}`,
+    );
+    assert(
+      featureNavigation.summaryOrder.length === 3 &&
+        featureNavigation.summaryOrder[0].startsWith("누적 채굴") &&
+        featureNavigation.summaryOrder[1].startsWith("총 클릭") &&
+        featureNavigation.summaryOrder[2].startsWith("오프라인 수익"),
+      `광맥 하단 누적 통계 순서가 올바르지 않습니다: ${JSON.stringify(featureNavigation.summaryOrder)}`,
+    );
+    pass("핵심 통계 3개를 상단에 합치고 누적 통계와 수동 저장을 요청한 위치로 이동한다");
 
     await page.evaluate("document.getElementById('achievementsMenuButton').click(); true");
     await waitFor(page, "document.getElementById('achievementsDialog').open");
@@ -300,11 +324,12 @@ async function run() {
         hasExport: dialog.contains(document.getElementById('exportButton')),
         hasImport: dialog.contains(document.getElementById('importOpenButton')),
         hasReset: dialog.contains(document.getElementById('resetOpenButton')),
+        hasManualSave: dialog.contains(document.getElementById('manualSaveButton')),
         hasStorageDetails: dialog.contains(document.querySelector('.storage-details'))
       };
     })()`);
     assert(
-      saveMenu.expanded === "true" && saveMenu.hasExport && saveMenu.hasImport && saveMenu.hasReset && saveMenu.hasStorageDetails,
+      saveMenu.expanded === "true" && saveMenu.hasExport && saveMenu.hasImport && saveMenu.hasReset && saveMenu.hasManualSave && saveMenu.hasStorageDetails,
       `저장 팝업 내용이 올바르지 않습니다: ${JSON.stringify(saveMenu)}`,
     );
     const saveMenuScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
@@ -339,6 +364,29 @@ async function run() {
     assert(progressed.clickPower === "2", "클릭 업그레이드 효과가 화면에 반영되지 않았습니다.");
     assert(progressed.achievementBadge === "1" && progressed.achievementMenuLabel.includes("1개 해금"), "업적 해금 수가 상단 메뉴에 반영되지 않았습니다.");
     pass("클릭, 구매, 업적 해금, 수동 저장이 일관된 상태를 만든다");
+
+    const upgradeToast = await page.evaluate(`(() => {
+      const region = document.getElementById('toastRegion');
+      const style = getComputedStyle(region);
+      return {
+        messages: [...region.querySelectorAll('.toast')].map((toast) => toast.textContent),
+        ariaLive: region.getAttribute('aria-live'),
+        position: style.position,
+        top: style.top,
+        right: style.right,
+        pointerEvents: style.pointerEvents
+      };
+    })()`);
+    assert(
+      upgradeToast.messages.some((message) => message.includes("낡은 곡괭이 레벨 1 달성")) &&
+        upgradeToast.ariaLive === "polite" &&
+        upgradeToast.position === "fixed" &&
+        upgradeToast.top === "18px" &&
+        upgradeToast.right === "18px" &&
+        upgradeToast.pointerEvents === "none",
+      `업그레이드 알림 toast 구성이 올바르지 않습니다: ${JSON.stringify(upgradeToast)}`,
+    );
+    pass("업그레이드 결과를 포커스를 가로채지 않는 우측 상단 toast로 안내한다");
 
     await page.evaluate("document.getElementById('saveMenuButton').click(); true");
     await waitFor(page, "document.getElementById('saveManagementDialog').open");
@@ -535,10 +583,22 @@ async function run() {
     await waitFor(page, "!document.getElementById('gameApp').classList.contains('is-hidden')");
     const desktopLayout = await page.evaluate(`(() => ({
       noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
-      offlineDialogOpen: document.getElementById('offlineDialog').open
+      offlineDialogOpen: document.getElementById('offlineDialog').open,
+      topbarHeight: document.querySelector('.topbar').getBoundingClientRect().height,
+      contentOffset: document.querySelector('.main-grid').getBoundingClientRect().top - document.querySelector('.topbar').getBoundingClientRect().top,
+      topbarStats: document.querySelectorAll('.topbar-stat').length,
+      summaryText: document.querySelector('.mine-summary').textContent.replace(/\s+/g, ' ').trim()
     }))()`);
     assert(desktopLayout.noHorizontalOverflow, "데스크톱 화면에 가로 오버플로가 있습니다.");
     assert(!desktopLayout.offlineDialogOpen, "5초 미만의 빠른 재진입에 오프라인 모달을 표시했습니다.");
+    assert(
+      desktopLayout.topbarHeight <= 105 && desktopLayout.contentOffset <= 140 && desktopLayout.topbarStats === 3,
+      `데스크톱 상단이 충분히 컴팩트하지 않습니다: ${JSON.stringify(desktopLayout)}`,
+    );
+    assert(
+      desktopLayout.summaryText.includes("누적 채굴 5만") && desktopLayout.summaryText.includes("총 클릭 321회") && desktopLayout.summaryText.includes("오프라인 수익"),
+      `데스크톱 광맥 요약 표시가 올바르지 않습니다: ${desktopLayout.summaryText}`,
+    );
     const screenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
     await writeFile(SCREENSHOT_PATH, Buffer.from(screenshot.data, "base64"));
     pass(`데스크톱 레이아웃을 렌더링하고 스크린샷을 생성한다 (${SCREENSHOT_PATH})`);
@@ -571,11 +631,24 @@ async function run() {
       mineWidth: document.getElementById('mineButton').getBoundingClientRect().width,
       resetButtons: getComputedStyle(document.querySelector('.save-actions')).gridTemplateColumns,
       menuRight: document.querySelector('.utility-menu').getBoundingClientRect().right,
-      dialogWidth: document.getElementById('saveManagementDialog').getBoundingClientRect().width
+      dialogWidth: document.getElementById('saveManagementDialog').getBoundingClientRect().width,
+      topbarHeight: document.querySelector('.topbar').getBoundingClientRect().height,
+      contentOffset: document.querySelector('.main-grid').getBoundingClientRect().top - document.querySelector('.topbar').getBoundingClientRect().top,
+      statTops: [...document.querySelectorAll('.topbar-stat')].map((item) => Math.round(item.getBoundingClientRect().top)),
+      actionsBelowStats: document.querySelector('.topbar-actions').getBoundingClientRect().top >= document.querySelector('.topbar-stats').getBoundingClientRect().bottom,
+      manualSaveInDialog: document.getElementById('saveManagementDialog').contains(document.getElementById('manualSaveButton'))
     }))()`);
     assert(mobileLayout.scrollWidth <= mobileLayout.viewport, `모바일 화면에 가로 오버플로가 있습니다: ${JSON.stringify(mobileLayout)}`);
     assert(mobileLayout.mineWidth < mobileLayout.viewport, "모바일 광맥 버튼이 뷰포트를 벗어났습니다.");
     assert(mobileLayout.menuRight <= mobileLayout.viewport && mobileLayout.dialogWidth <= mobileLayout.viewport, "모바일 아이콘 메뉴 또는 기능 팝업이 뷰포트를 벗어났습니다.");
+    assert(
+      mobileLayout.topbarHeight <= 150 &&
+        mobileLayout.contentOffset <= 175 &&
+        new Set(mobileLayout.statTops).size === 1 &&
+        mobileLayout.actionsBelowStats &&
+        mobileLayout.manualSaveInDialog,
+      `모바일 컴팩트 상단 구조가 올바르지 않습니다: ${JSON.stringify(mobileLayout)}`,
+    );
     await page.evaluate("document.getElementById('saveManagementDialog').close(); true");
     await page.evaluate("window.scrollTo(0, 0); true");
     await delay(3_800);

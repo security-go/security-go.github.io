@@ -70,6 +70,18 @@ input:focus-visible {
   display: none !important;
 }
 
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}
+
 .noscript-message {
   padding: 20px;
   color: var(--ink);
@@ -363,34 +375,51 @@ input:focus-visible {
 .topbar {
   position: relative;
   z-index: 10;
-  display: flex;
+  display: grid;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 24px;
-  padding: 20px 24px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 12px 16px;
 }
 
-.topbar-title {
-  margin: 0;
-  font-family: var(--font-pixel);
-  font-size: clamp(1.35rem, 4vw, 2.2rem);
-  line-height: 1.35;
-  text-shadow: 3px 3px 0 var(--gold);
+.topbar-stats {
+  display: grid;
+  min-width: 0;
+  align-items: stretch;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.topbar-korean {
-  margin: 6px 0 0;
-  color: var(--slate);
-  font-weight: 900;
+.topbar-stat {
+  min-width: 0;
+  padding: 2px clamp(10px, 2vw, 20px);
+  border-right: 3px solid var(--ink);
+}
+
+.topbar-stat:first-child {
+  padding-left: 0;
+}
+
+.topbar-stat:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.topbar-stat .stat-label {
+  margin-bottom: 2px;
+  font-size: 0.72rem;
+}
+
+.topbar-stat .stat-value {
+  line-height: 1.4;
 }
 
 .topbar-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
 }
 
 .utility-menu {
@@ -493,10 +522,13 @@ input:focus-visible {
 }
 
 .save-indicator {
-  min-width: 124px;
-  font-size: 0.82rem;
+  min-width: 110px;
+  overflow: hidden;
+  font-size: 0.78rem;
   font-weight: 900;
   text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .save-indicator::before {
@@ -521,18 +553,6 @@ input:focus-visible {
   background: var(--gold);
   box-shadow: 5px 5px 0 var(--ink);
   font-weight: 900;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  min-width: 0;
-  padding: 16px;
 }
 
 .stat-label {
@@ -715,17 +735,21 @@ input:focus-visible {
 }
 
 .mine-summary {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 16px;
+  margin-top: 14px;
   color: var(--slate);
-  font-size: 0.83rem;
+  font-size: clamp(0.72rem, 1.5vw, 0.83rem);
   font-weight: 800;
+  line-height: 1.8;
 }
 
 .mine-summary strong {
   color: var(--ink);
+}
+
+.mine-summary-separator {
+  margin: 0 6px;
+  color: var(--ore);
+  font-weight: 900;
 }
 
 .upgrade-list {
@@ -924,7 +948,7 @@ input:focus-visible {
 
 .save-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1180,10 +1204,6 @@ body.reduce-motion *::after {
 }
 
 @media (max-width: 920px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .main-grid {
     grid-template-columns: 1fr;
   }
@@ -1249,45 +1269,51 @@ body.reduce-motion *::after {
 
   .game-shell {
     width: min(100% - 20px, 1180px);
-    padding-top: 18px;
+    padding-top: 14px;
   }
 
   .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 16px;
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+  }
+
+  .topbar-stat {
+    padding: 2px 8px;
+  }
+
+  .topbar-stat .stat-label {
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  .topbar-stat .stat-value {
+    font-size: clamp(0.9rem, 5vw, 1.1rem);
   }
 
   .topbar-actions {
-    display: grid;
     width: 100%;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
+    justify-content: space-between;
+    gap: 8px;
   }
 
   .save-indicator {
-    grid-column: 1 / -1;
     min-width: 0;
+    flex: 1 1 auto;
+    font-size: 0.72rem;
     text-align: left;
   }
 
-  #manualSaveButton {
-    width: 100%;
-  }
-
   .utility-menu {
-    justify-self: end;
+    flex: 0 0 auto;
   }
 
   .utility-menu-button::after {
     display: none;
   }
 
-  .stats-grid {
-    gap: 10px;
-  }
-
-  .stat-card,
   .mine-section,
   .shop-section {
     padding: 14px;
@@ -1321,7 +1347,6 @@ body.reduce-motion *::after {
     min-height: 118px;
   }
 
-  .mine-summary,
   .game-footer {
     align-items: flex-start;
     flex-direction: column;

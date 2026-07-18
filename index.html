@@ -83,15 +83,24 @@
   </dialog>
 
   <main id="gameApp" class="game-shell is-hidden" aria-hidden="true">
-    <header class="topbar pixel-panel">
-      <div>
-        <p class="eyebrow">LOCAL IDLE CLICKER</p>
-        <h1 class="topbar-title">PIXEL MINE</h1>
-        <p class="topbar-korean">픽셀 광산</p>
-      </div>
+    <header class="topbar pixel-panel" aria-label="광산 핵심 현황과 기능 메뉴">
+      <h1 class="visually-hidden">PIXEL MINE 픽셀 광산</h1>
+      <section class="topbar-stats" aria-label="핵심 광산 현황">
+        <div class="topbar-stat">
+          <span class="stat-label">보유 광석</span>
+          <strong id="currencyValue" class="stat-value">0</strong>
+        </div>
+        <div class="topbar-stat">
+          <span class="stat-label">클릭당</span>
+          <strong id="perClickValue" class="stat-value">1</strong>
+        </div>
+        <div class="topbar-stat">
+          <span class="stat-label">초당 생산</span>
+          <strong id="perSecondValue" class="stat-value">0</strong>
+        </div>
+      </section>
       <div class="topbar-actions">
         <span id="saveIndicator" class="save-indicator" aria-live="polite">시작 준비</span>
-        <button id="manualSaveButton" class="pixel-button pixel-button--small" type="button">지금 저장</button>
         <nav class="utility-menu" aria-label="게임 기능 메뉴">
           <button
             id="achievementsMenuButton"
@@ -132,25 +141,6 @@
 
     <div id="sessionWarning" class="session-warning is-hidden" role="alert"></div>
 
-    <section class="stats-grid" aria-label="광산 현황">
-      <article class="stat-card pixel-panel">
-        <span class="stat-label">보유 광석</span>
-        <strong id="currencyValue" class="stat-value">0</strong>
-      </article>
-      <article class="stat-card pixel-panel">
-        <span class="stat-label">클릭당</span>
-        <strong id="perClickValue" class="stat-value">1</strong>
-      </article>
-      <article class="stat-card pixel-panel">
-        <span class="stat-label">초당 생산</span>
-        <strong id="perSecondValue" class="stat-value">0</strong>
-      </article>
-      <article class="stat-card pixel-panel">
-        <span class="stat-label">누적 채굴</span>
-        <strong id="totalEarnedValue" class="stat-value">0</strong>
-      </article>
-    </section>
-
     <div class="main-grid">
       <section class="mine-section pixel-panel" aria-labelledby="mineHeading">
         <div class="section-heading">
@@ -170,9 +160,12 @@
           </button>
         </div>
 
-        <div class="mine-summary">
+        <div class="mine-summary" aria-label="누적 채굴 통계">
+          <span>누적 채굴 <strong id="totalEarnedValue">0</strong></span>
+          <span class="mine-summary-separator" aria-hidden="true">·</span>
           <span>총 클릭 <strong id="totalClicksValue">0</strong>회</span>
-          <span>오프라인 누적 <strong id="offlineEarnedValue">0</strong></span>
+          <span class="mine-summary-separator" aria-hidden="true">·</span>
+          <span>오프라인 수익 <strong id="offlineEarnedValue">0</strong></span>
         </div>
       </section>
 
@@ -282,6 +275,7 @@
       </dl>
 
       <div class="save-actions">
+        <button id="manualSaveButton" class="pixel-button pixel-button--primary" type="button">지금 저장</button>
         <button id="persistenceButton" class="pixel-button" type="button">저장 보호 요청</button>
         <button id="exportButton" class="pixel-button pixel-button--primary" type="button">세이브 코드 내보내기</button>
         <button id="importOpenButton" class="pixel-button" type="button">세이브 코드 불러오기</button>
