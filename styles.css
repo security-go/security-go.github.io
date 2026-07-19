@@ -609,6 +609,31 @@ input:focus-visible {
   background: var(--mine-accent);
 }
 
+.ore-progression-bonus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: -4px 0 14px;
+  padding: 8px 10px;
+  border: 3px solid var(--ink);
+  background: #f5dfb1;
+  box-shadow: inset 7px 0 0 var(--mine-accent);
+  color: var(--slate);
+  font-size: 0.75rem;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
+.ore-progression-bonus span:first-child {
+  margin-left: 7px;
+}
+
+.ore-progression-bonus strong {
+  color: var(--ink);
+  font-family: var(--font-pixel);
+  font-size: 0.52rem;
+}
+
 .section-heading {
   display: flex;
   align-items: flex-start;
@@ -1084,6 +1109,28 @@ input:focus-visible {
   color: var(--slate);
   font-size: 0.75rem;
   line-height: 1.5;
+}
+
+.mineral-bonus {
+  min-height: 28px;
+  margin: 0;
+  padding: 5px 7px;
+  border-left: 5px solid var(--mineral-accent);
+  background: #e9e1c4;
+  color: var(--ink);
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+.mineral-card:not(.is-unlocked) .mineral-bonus {
+  opacity: 0.58;
+}
+
+.mineral-card.is-progression .mineral-bonus {
+  color: var(--mineral-contrast);
+  background: var(--mineral-accent);
+  opacity: 1;
 }
 
 .mineral-status {
@@ -1637,6 +1684,11 @@ body.reduce-motion *::after {
     min-height: 340px;
   }
 
+  .ore-progression-bonus {
+    gap: 5px 10px;
+    font-size: 0.69rem;
+  }
+
   .ore-stage-marker {
     top: 12px;
     left: 12px;
@@ -1726,6 +1778,8 @@ body.reduce-motion *::after {
   .mine-stage,
   .upgrade-card,
   .mineral-card,
+  .ore-progression-bonus,
+  .mineral-bonus,
   .achievement-card,
   .storage-details > div {
     border-color: CanvasText;

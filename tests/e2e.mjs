@@ -307,6 +307,8 @@ async function run() {
         purchaseModes: document.querySelectorAll('[data-purchase-mode]').length,
         defaultPurchaseMode: document.querySelector('[data-purchase-mode="one"]').getAttribute('aria-pressed'),
         purchaseToolbarInShop: document.querySelector('.shop-section').contains(document.querySelector('.purchase-toolbar')),
+        oreBonusInMine: document.querySelector('.mine-section').contains(document.getElementById('oreProgressionBonus')),
+        initialOreBonus: document.getElementById('oreProgressionBonus').textContent.replace(/\s+/g, ' ').trim(),
         summaryOrder: [...document.querySelectorAll('.mine-summary > span:not(.mine-summary-separator)')].map((item) => item.textContent.trim()),
         menuButtons: document.querySelectorAll('.utility-menu-button').length,
         catalogBeforeAchievement: catalogButton.nextElementSibling === achievementButton,
@@ -337,7 +339,11 @@ async function run() {
         featureNavigation.manualSaveMoved &&
         featureNavigation.purchaseModes === 3 &&
         featureNavigation.defaultPurchaseMode === "true" &&
-        featureNavigation.purchaseToolbarInShop,
+        featureNavigation.purchaseToolbarInShop &&
+        featureNavigation.oreBonusInMine &&
+        featureNavigation.initialOreBonus.includes("최고 개척 석탄") &&
+        featureNavigation.initialOreBonus.includes("클릭 ×1") &&
+        featureNavigation.initialOreBonus.includes("자동 ×1"),
       `컴팩트 상단 구조가 올바르지 않습니다: ${JSON.stringify(featureNavigation)}`,
     );
     assert(
@@ -362,6 +368,11 @@ async function run() {
       shaft: document.getElementById('mineShaftEyebrow').textContent,
       selectButtons: document.querySelectorAll('#mineralCatalogDialog .mineral-select-button').length,
       coalSelectDisabled: document.querySelector('[data-mineral-id="coal"] .mineral-select-button').disabled,
+      bonusRows: document.querySelectorAll('#mineralCatalogDialog .mineral-bonus').length,
+      coalBonus: document.querySelector('[data-mineral-id="coal"] .mineral-bonus').textContent,
+      bonusTexts: [...document.querySelectorAll('#mineralCatalogDialog .mineral-bonus')].map((item) => item.textContent.replace('개척 보너스 · ', '')),
+      progression: document.querySelector('#mineralCatalogDialog .mineral-card.is-progression')?.dataset.mineralId,
+      appearanceOnlyNotice: document.querySelector('#mineralCatalogDialog .feature-dialog-description').textContent,
       canvasesValid: [...document.querySelectorAll('#mineralCatalogDialog canvas')].every((canvas) => canvas.width === 24 && canvas.height === 24),
       uniqueSprites: new Set([...document.querySelectorAll('#mineralCatalogDialog canvas')].map((canvas) => canvas.toDataURL())).size
     }))()`);
@@ -376,6 +387,18 @@ async function run() {
         initialCatalog.shaft.includes("01") &&
         initialCatalog.selectButtons === 6 &&
         initialCatalog.coalSelectDisabled &&
+        initialCatalog.bonusRows === 6 &&
+        initialCatalog.coalBonus.includes("클릭 ×1 · 자동 ×1") &&
+        JSON.stringify(initialCatalog.bonusTexts) === JSON.stringify([
+          "클릭 ×1 · 자동 ×1",
+          "클릭 ×1.5 · 자동 ×1.25",
+          "클릭 ×2 · 자동 ×2",
+          "클릭 ×3.5 · 자동 ×3",
+          "클릭 ×6 · 자동 ×7",
+          "클릭 ×12 · 자동 ×15",
+        ]) &&
+        initialCatalog.progression === "coal" &&
+        initialCatalog.appearanceOnlyNotice.includes("외형만 변경") &&
         initialCatalog.canvasesValid &&
         initialCatalog.uniqueSprites === 6,
       `초기 광물 도감 또는 석탄 광맥 구성이 올바르지 않습니다: ${JSON.stringify(initialCatalog)}`,
@@ -664,6 +687,8 @@ async function run() {
       save.data.currency = 0;
       save.data.stats.offlineEarned = 0;
       save.data.upgrades.miner = 2;
+      save.data.upgrades.ore_milestone = 1;
+      save.data.selectedOreId = 'coal';
       save.data.lastProcessedAt = Date.now() - (48 * 60 * 60 * 1000);
       save.data.lastSavedAt = save.data.lastProcessedAt;
       localStorage.setItem('pixelMine.save', JSON.stringify(save));
@@ -679,11 +704,11 @@ async function run() {
         duration: document.getElementById('offlineDuration').textContent
       };
     })()`);
-    assert(offline.currency >= 86_400 && offline.currency < 86_405, `24시간 상한 수익이 잘못되었습니다: ${offline.currency}`);
-    assert(offline.offlineEarned >= 86_400 && offline.offlineEarned < 86_405, "오프라인 누적 통계가 잘못되었습니다.");
+    assert(offline.currency >= 108_000 && offline.currency < 108_007, `브론즈 자동 배율이 적용된 24시간 상한 수익이 잘못되었습니다: ${offline.currency}`);
+    assert(offline.offlineEarned >= 108_000 && offline.offlineEarned < 108_007, "브론즈 자동 배율이 오프라인 누적 통계에 적용되지 않았습니다.");
     assert(offline.duration.includes("1일"), "24시간 상한이 모달에 표시되지 않았습니다.");
     await page.evaluate("document.getElementById('offlineDialog').close(); true");
-    pass("48시간 공백에도 자동 생산 수익을 24시간으로 제한한다");
+    pass("선택 외형과 무관한 최고 개척 자동 배율로 오프라인 수익을 계산하고 24시간으로 제한한다");
 
     await reload(page);
     await page.evaluate(`(() => {
@@ -743,7 +768,12 @@ async function run() {
         unlocked: document.querySelectorAll('.mineral-card.is-unlocked').length,
         current: document.querySelector('.mineral-card.is-current')?.dataset.mineralId,
         sprite: document.getElementById('oreCanvas').toDataURL(),
-        milestoneStage: document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-level').textContent
+        milestoneStage: document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-level').textContent,
+        clickPower: document.getElementById('perClickValue').title,
+        autoRate: document.getElementById('perSecondValue').title,
+        bonus: document.getElementById('oreProgressionBonus').textContent.replace(/\s+/g, ' ').trim(),
+        activeBonus: document.querySelector('.mineral-card.is-progression')?.dataset.mineralId,
+        bronzeBonus: document.querySelector('[data-mineral-id="bronze"] .mineral-bonus').textContent
       };
     })()`);
     assert(
@@ -757,7 +787,14 @@ async function run() {
         bronzeMilestone.unlocked === 2 &&
         bronzeMilestone.current === "bronze" &&
         bronzeMilestone.sprite !== coalSprite &&
-        bronzeMilestone.milestoneStage === "STAGE 2/6",
+        bronzeMilestone.milestoneStage === "STAGE 2/6" &&
+        bronzeMilestone.clickPower === "3" &&
+        bronzeMilestone.autoRate === "1.25" &&
+        bronzeMilestone.bonus.includes("최고 개척 브론즈") &&
+        bronzeMilestone.bonus.includes("클릭 ×1.5") &&
+        bronzeMilestone.bonus.includes("자동 ×1.25") &&
+        bronzeMilestone.activeBonus === "bronze" &&
+        bronzeMilestone.bronzeBonus.includes("클릭 ×1.5 · 자동 ×1.25"),
       `브론즈 광맥 마일스톤 적용이 올바르지 않습니다: ${JSON.stringify(bronzeMilestone)}`,
     );
     await page.evaluate(`(() => {
@@ -772,15 +809,27 @@ async function run() {
         ore: document.getElementById('mineSection').dataset.ore,
         badge: document.getElementById('mineralCatalogMenuBadge').textContent,
         current: document.querySelector('.mineral-card.is-current')?.dataset.mineralId,
-        bronzeSelectable: !document.querySelector('[data-mineral-id="bronze"] .mineral-select-button').disabled
+        bronzeSelectable: !document.querySelector('[data-mineral-id="bronze"] .mineral-select-button').disabled,
+        activeBonus: document.querySelector('.mineral-card.is-progression')?.dataset.mineralId,
+        progressionOre: document.getElementById('progressionOreName').textContent,
+        clickPower: document.getElementById('perClickValue').title,
+        autoRate: document.getElementById('perSecondValue').title
       };
     })()`);
     assert(
-      reselectedCoal.selectedOreId === "coal" && reselectedCoal.ore === "coal" && reselectedCoal.badge === "2/6" && reselectedCoal.current === "coal" && reselectedCoal.bronzeSelectable,
+      reselectedCoal.selectedOreId === "coal" &&
+        reselectedCoal.ore === "coal" &&
+        reselectedCoal.badge === "2/6" &&
+        reselectedCoal.current === "coal" &&
+        reselectedCoal.bronzeSelectable &&
+        reselectedCoal.activeBonus === "bronze" &&
+        reselectedCoal.progressionOre === "브론즈" &&
+        reselectedCoal.clickPower === "3" &&
+        reselectedCoal.autoRate === "1.25",
       `발견 광맥 재선택 결과가 올바르지 않습니다: ${JSON.stringify(reselectedCoal)}`,
     );
     await page.evaluate("document.querySelector('[data-close-dialog=\"mineralCatalogDialog\"]').click(); true");
-    pass("발견한 브론즈 광맥에서 석탄 외형을 다시 선택하고 v3 세이브에 보존한다");
+    pass("석탄 외형을 다시 선택해도 브론즈 클릭·자동 생산 개척 배율을 유지하고 v3 세이브에 보존한다");
 
     await page.evaluate("document.querySelector('[data-purchase-mode=\"max\"]').click(); true");
     const maxMilestoneOffer = await page.evaluate(`(() => ({
@@ -806,14 +855,26 @@ async function run() {
         ore: document.getElementById('mineSection').dataset.ore,
         badge: document.getElementById('mineralCatalogMenuBadge').textContent,
         discoveries: discoveryIds.every((id) => save.data.unlockedAchievements[id] > 0),
-        milestoneMax: document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-buy-cost').textContent
+        milestoneMax: document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-buy-cost').textContent,
+        clickPower: document.getElementById('perClickValue').title,
+        autoRate: document.getElementById('perSecondValue').title,
+        bonus: document.getElementById('oreProgressionBonus').textContent.replace(/\s+/g, ' ').trim()
       };
     })()`);
     assert(
-      fullCatalog.selectedOreId === "diamond" && fullCatalog.ore === "diamond" && fullCatalog.badge === "6/6" && fullCatalog.discoveries && fullCatalog.milestoneMax === "MAX",
+      fullCatalog.selectedOreId === "diamond" &&
+        fullCatalog.ore === "diamond" &&
+        fullCatalog.badge === "6/6" &&
+        fullCatalog.discoveries &&
+        fullCatalog.milestoneMax === "MAX" &&
+        fullCatalog.clickPower === "24" &&
+        fullCatalog.autoRate === "15" &&
+        fullCatalog.bonus.includes("최고 개척 다이아") &&
+        fullCatalog.bonus.includes("클릭 ×12") &&
+        fullCatalog.bonus.includes("자동 ×15"),
       `광물 전체 발견 또는 발견 업적 결과가 올바르지 않습니다: ${JSON.stringify(fullCatalog)}`,
     );
-    pass("최대 구매로 남은 4단계를 일괄 개척하고 광물 발견 업적 5종을 해금한다");
+    pass("최대 구매로 남은 4단계를 개척해 다이아 배율을 적용하고 광물 발견 업적 5종을 해금한다");
 
     const bulkLevels = await page.evaluate(`(() => {
       document.querySelector('[data-purchase-mode="ten"]').click();
@@ -910,6 +971,9 @@ async function run() {
       topbarStats: document.querySelectorAll('.topbar-stat').length,
       ore: document.getElementById('mineSection').dataset.ore,
       catalogBadge: document.getElementById('mineralCatalogMenuBadge').textContent,
+      clickPower: document.getElementById('perClickValue').title,
+      autoRate: document.getElementById('perSecondValue').title,
+      progressionBonus: document.getElementById('oreProgressionBonus').textContent.replace(/\s+/g, ' ').trim(),
       summaryText: document.querySelector('.mine-summary').textContent.replace(/\s+/g, ' ').trim()
     }))()`);
     assert(desktopLayout.noHorizontalOverflow, "데스크톱 화면에 가로 오버플로가 있습니다.");
@@ -919,6 +983,14 @@ async function run() {
       `데스크톱 상단이 충분히 컴팩트하지 않습니다: ${JSON.stringify(desktopLayout)}`,
     );
     assert(desktopLayout.ore === "diamond" && desktopLayout.catalogBadge === "6/6", "다이아 최종 광맥 또는 도감 6/6 표시가 올바르지 않습니다.");
+    assert(
+      desktopLayout.clickPower === "192" &&
+        desktopLayout.autoRate === "720" &&
+        desktopLayout.progressionBonus.includes("최고 개척 다이아") &&
+        desktopLayout.progressionBonus.includes("클릭 ×12") &&
+        desktopLayout.progressionBonus.includes("자동 ×15"),
+      `다이아 개척 배율 또는 표시가 올바르지 않습니다: ${JSON.stringify(desktopLayout)}`,
+    );
     assert(
       desktopLayout.summaryText.includes("누적 채굴 5만") && desktopLayout.summaryText.includes("총 클릭 321회") && desktopLayout.summaryText.includes("오프라인 수익"),
       `데스크톱 광맥 요약 표시가 올바르지 않습니다: ${desktopLayout.summaryText}`,

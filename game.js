@@ -29,6 +29,8 @@
       englishName: "COAL",
       description: "빛을 삼키는 검은 탄층. 픽셀 광산의 첫 연료입니다.",
       unlockCost: 0,
+      clickMultiplier: 1,
+      autoMultiplier: 1,
       palette: {
         outline: "#080b0e",
         base: "#15191d",
@@ -48,6 +50,8 @@
       englishName: "BRONZE",
       description: "암반 사이로 붉은 갈색 금속빛이 흐르는 따뜻한 광맥입니다.",
       unlockCost: 250_000,
+      clickMultiplier: 1.5,
+      autoMultiplier: 1.25,
       palette: {
         outline: "#21150f",
         base: "#3b2b24",
@@ -67,6 +71,8 @@
       englishName: "IRON",
       description: "차갑고 단단한 은회색 결정이 층층이 박힌 산업의 광맥입니다.",
       unlockCost: 5_000_000,
+      clickMultiplier: 2,
+      autoMultiplier: 2,
       palette: {
         outline: "#151b22",
         base: "#323d47",
@@ -86,6 +92,8 @@
       englishName: "GOLD",
       description: "어두운 암반을 가르는 황금빛 결이 선명하게 반짝이는 광맥입니다.",
       unlockCost: 30_000_000,
+      clickMultiplier: 3.5,
+      autoMultiplier: 3,
       palette: {
         outline: "#21180a",
         base: "#44371f",
@@ -105,6 +113,8 @@
       englishName: "RUBY",
       description: "깊은 붉은 결정이 맥박치듯 빛나는 고열의 보석 광맥입니다.",
       unlockCost: 400_000_000,
+      clickMultiplier: 6,
+      autoMultiplier: 7,
       palette: {
         outline: "#210b13",
         base: "#481627",
@@ -124,6 +134,8 @@
       englishName: "DIAMOND",
       description: "청백색 결정면이 별빛처럼 갈라지는 최심부의 희귀 광맥입니다.",
       unlockCost: 12_500_000_000,
+      clickMultiplier: 12,
+      autoMultiplier: 15,
       palette: {
         outline: "#071a24",
         base: "#12394b",
@@ -428,6 +440,10 @@
       "mineStage",
       "mineShaftEyebrow",
       "currentOreBadge",
+      "progressionOreName",
+      "progressionClickMultiplier",
+      "progressionAutoMultiplier",
+      "oreProgressionBonus",
       "currentOreStageLabel",
       "currentOreName",
       "mineButton",
@@ -1108,16 +1124,18 @@
 
   function calculateClickPower(data = state) {
     if (!data) return 1;
-    return 1 + UPGRADE_DEFINITIONS
+    const basePower = 1 + UPGRADE_DEFINITIONS
       .filter((upgrade) => upgrade.type === "click")
       .reduce((total, upgrade) => total + data.upgrades[upgrade.id] * upgrade.effectPerLevel, 0);
+    return Math.min(MAX_SAFE_VALUE, basePower * getProgressionOre(data).clickMultiplier);
   }
 
   function calculateAutoRate(data = state) {
     if (!data) return 0;
-    return UPGRADE_DEFINITIONS
+    const baseRate = UPGRADE_DEFINITIONS
       .filter((upgrade) => upgrade.type === "auto")
       .reduce((total, upgrade) => total + data.upgrades[upgrade.id] * upgrade.effectPerLevel, 0);
+    return Math.min(MAX_SAFE_VALUE, baseRate * getProgressionOre(data).autoMultiplier);
   }
 
   function calculateUpgradeCost(definition, level) {
@@ -1132,6 +1150,10 @@
   function getUnlockedOreIndex(data = state) {
     const level = data?.upgrades?.[ORE_MILESTONE_UPGRADE_ID] ?? 0;
     return Math.min(ORE_DEFINITIONS.length - 1, Math.max(0, Math.floor(level)));
+  }
+
+  function getProgressionOre(data = state) {
+    return ORE_DEFINITIONS[getUnlockedOreIndex(data)];
   }
 
   function getSelectedOreIndex(data = state) {
@@ -1182,8 +1204,8 @@
 
     const nextOre = ORE_DEFINITIONS[level + 1];
     return nextOre
-      ? `다음 마일스톤: ${nextOre.name} 광맥 · 도감 등록`
-      : "6종 광물 발견 완료 · 외형은 도감에서 선택";
+      ? `해금 효과: ${nextOre.name} · ${getOreBonusText(nextOre)}`
+      : `개척 완료 · ${getOreBonusText(ORE_DEFINITIONS[ORE_DEFINITIONS.length - 1])}`;
   }
 
   function handleMineClick() {
@@ -1225,8 +1247,8 @@
     scheduleMutationSave();
     const message = finalOre
       ? purchase.count === 1
-        ? `${finalOre.name} 광맥 해금 · 도감 등록`
-        : `${finalOre.name} 광맥까지 ${purchase.count}단계 해금 · 도감 등록`
+        ? `${finalOre.name} 광맥 해금 · ${getOreBonusText(finalOre)}`
+        : `${finalOre.name}까지 ${purchase.count}단계 해금 · ${getOreBonusText(finalOre)}`
       : purchase.count === 1
         ? `${definition.name} 레벨 ${state.upgrades[id]} 달성`
         : `${definition.name} ${purchase.count}개 구매 · 레벨 ${state.upgrades[id]} 달성`;
@@ -1316,6 +1338,7 @@
       card.dataset.mineralId = definition.id;
       card.style.setProperty("--mineral-accent", definition.palette.accent);
       card.style.setProperty("--mineral-stage", definition.palette.stage);
+      card.style.setProperty("--mineral-contrast", definition.palette.contrast);
 
       const preview = document.createElement("div");
       preview.className = "mineral-preview";
@@ -1338,17 +1361,20 @@
       heading.append(name, stage);
       const description = document.createElement("p");
       description.className = "mineral-description";
+      const bonus = document.createElement("p");
+      bonus.className = "mineral-bonus";
+      bonus.textContent = getOreBonusText(definition);
       const status = document.createElement("span");
       status.className = "mineral-status";
       const selectButton = document.createElement("button");
       selectButton.className = "pixel-button pixel-button--small mineral-select-button";
       selectButton.type = "button";
       selectButton.addEventListener("click", () => selectOre(definition.id));
-      body.append(heading, description, status, selectButton);
+      body.append(heading, description, bonus, status, selectButton);
 
       card.append(preview, body);
       dom.mineralCatalogList.append(card);
-      mineralElements.set(definition.id, { card, description, status, selectButton });
+      mineralElements.set(definition.id, { card, description, bonus, status, selectButton });
     });
   }
 
@@ -1379,6 +1405,7 @@
     if (!state) return;
     const oreIndex = getSelectedOreIndex();
     const ore = ORE_DEFINITIONS[oreIndex];
+    const progressionOre = getProgressionOre();
     const stageNumber = String(oreIndex + 1).padStart(2, "0");
 
     dom.mineSection.dataset.ore = ore.id;
@@ -1389,11 +1416,21 @@
     dom.mineSection.style.setProperty("--mine-contrast", ore.palette.contrast);
     dom.mineShaftEyebrow.textContent = `MINE SHAFT ${stageNumber}`;
     dom.currentOreBadge.textContent = `${ore.name} · ${oreIndex + 1}/${ORE_DEFINITIONS.length}`;
+    dom.progressionOreName.textContent = progressionOre.name;
+    dom.progressionClickMultiplier.textContent = `×${formatMultiplier(progressionOre.clickMultiplier)}`;
+    dom.progressionAutoMultiplier.textContent = `×${formatMultiplier(progressionOre.autoMultiplier)}`;
+    dom.oreProgressionBonus.setAttribute(
+      "aria-label",
+      `최고 개척 ${progressionOre.name}, 클릭 배율 ${formatMultiplier(progressionOre.clickMultiplier)}배, 자동 생산 배율 ${formatMultiplier(progressionOre.autoMultiplier)}배`,
+    );
     dom.currentOreStageLabel.textContent = `STAGE ${stageNumber}`;
     dom.currentOreName.textContent = ore.name;
     dom.mineButtonLabel.textContent = `${ore.name} 채굴`;
     dom.mineButton.setAttribute("aria-label", `${ore.name} 광맥을 채굴해 광석 획득`);
-    dom.mineStage.setAttribute("aria-label", `현재 ${ore.name} 광맥, 전체 ${ORE_DEFINITIONS.length}단계 중 ${oreIndex + 1}단계`);
+    dom.mineStage.setAttribute(
+      "aria-label",
+      `현재 외형 ${ore.name} 광맥, 최고 개척 ${progressionOre.name}, 클릭 ${formatMultiplier(progressionOre.clickMultiplier)}배, 자동 생산 ${formatMultiplier(progressionOre.autoMultiplier)}배`,
+    );
     drawOreSprite(dom.oreCanvas, ore);
   }
 
@@ -1410,7 +1447,7 @@
     renderOreProgression();
     renderMineralCatalog();
     scheduleMutationSave();
-    showToast(`${ORE_DEFINITIONS[oreIndex].name} 광맥 외형을 적용했습니다.`, { key: `ore-select:${id}` });
+    showToast(`${ORE_DEFINITIONS[oreIndex].name} 외형을 적용했습니다. 개척 보너스는 유지됩니다.`, { key: `ore-select:${id}` });
   }
 
   function renderMineralCatalog() {
@@ -1423,12 +1460,23 @@
       if (!elements) return;
       const unlocked = index <= unlockedIndex;
       const current = index === selectedIndex;
+      const progression = index === unlockedIndex;
       elements.card.classList.toggle("is-unlocked", unlocked);
       elements.card.classList.toggle("is-current", current);
+      elements.card.classList.toggle("is-progression", progression);
       elements.description.textContent = unlocked
         ? definition.description
         : `광맥 개척 STAGE ${String(index + 1).padStart(2, "0")}에서 발견 · ${formatNumber(definition.unlockCost)} 광석`;
-      elements.status.textContent = current ? "CURRENT" : unlocked ? "DISCOVERED" : "LOCKED";
+      elements.bonus.textContent = `개척 보너스 · ${getOreBonusText(definition)}`;
+      elements.status.textContent = current && progression
+        ? "LOOK + BONUS"
+        : current
+          ? "CURRENT LOOK"
+          : progression
+            ? "ACTIVE BONUS"
+            : unlocked
+              ? "DISCOVERED"
+              : "LOCKED";
       elements.selectButton.disabled = !unlocked || current || sessionBlocked;
       elements.selectButton.textContent = current ? "적용 중" : unlocked ? "이 광맥 선택" : "미발견";
       elements.selectButton.setAttribute(
@@ -1437,7 +1485,7 @@
       );
       elements.card.setAttribute(
         "aria-label",
-        `${definition.name}, ${current ? "현재 광맥" : unlocked ? "발견 완료" : "미발견"}`,
+        `${definition.name}, ${current ? "현재 외형" : unlocked ? "발견 완료" : "미발견"}${progression ? ", 개척 보너스 적용 중" : ""}, ${getOreBonusText(definition)}`,
       );
     });
 
@@ -1484,6 +1532,7 @@
       const nextOre = isMilestone ? ORE_DEFINITIONS[level + 1] : null;
       const paletteOre = nextOre ?? ORE_DEFINITIONS[getUnlockedOreIndex()];
       const purchase = calculateBulkPurchase(definition, level, state.currency);
+      const targetOre = isMilestone && purchase.count > 0 ? ORE_DEFINITIONS[level + purchase.count] : null;
       const purchaseUnit = isMilestone ? "단계" : "개";
 
       elements.level.textContent = isMilestone
@@ -1518,7 +1567,7 @@
           : purchase.count === 0
             ? `${definition.name} 구매 불가, 최소 비용 ${formatNumber(purchase.nextCost)} 광석`
             : isMilestone
-              ? `${nextOre.name}부터 광맥 ${purchase.count}단계 개척, 총비용 ${formatNumber(purchase.totalCost)} 광석`
+              ? `${nextOre.name}부터 ${targetOre.name}까지 광맥 ${purchase.count}단계 개척, ${getOreBonusText(targetOre)}, 총비용 ${formatNumber(purchase.totalCost)} 광석`
               : `${definition.name} ${purchase.count}개 구매, 총비용 ${formatNumber(purchase.totalCost)} 광석`,
       );
     }
@@ -2219,6 +2268,14 @@
   function setNumberText(element, value) {
     element.textContent = formatNumber(value);
     element.title = formatExactNumber(value);
+  }
+
+  function getOreBonusText(ore) {
+    return `클릭 ×${formatMultiplier(ore.clickMultiplier)} · 자동 ×${formatMultiplier(ore.autoMultiplier)}`;
+  }
+
+  function formatMultiplier(value) {
+    return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value);
   }
 
   function formatNumber(value) {
