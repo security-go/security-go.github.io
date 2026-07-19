@@ -13,6 +13,7 @@ const START_NOTICE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-notice.png";
 const START_MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-mobile.png";
 const START_NOTICE_MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-notice-mobile.png";
 const MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-mobile.png";
+const MINERAL_CATALOG_SCREENSHOT_PATH = "/tmp/pixel-mine-minerals.png";
 const ACHIEVEMENTS_SCREENSHOT_PATH = "/tmp/pixel-mine-achievements.png";
 const SAVE_MENU_SCREENSHOT_PATH = "/tmp/pixel-mine-save-menu.png";
 const TOAST_SCREENSHOT_PATH = "/tmp/pixel-mine-toast-mobile.png";
@@ -265,15 +266,16 @@ async function run() {
         storageUsage: document.getElementById('storageUsage').textContent,
         saveSize: document.getElementById('saveSize').textContent,
         musicEnabled: save.data.settings.musicEnabled,
+        selectedOreId: save.data.selectedOreId,
         musicChecked: document.getElementById('musicToggle').checked,
         musicStatus: document.getElementById('musicStatus').textContent,
         musicPaused: audio.paused
       };
     })()`);
-    assert(started.version === 1 && started.label === "픽셀 광산", "v1 로컬 세이브가 생성되지 않았습니다.");
-    assert(started.upgrades === 6 && started.achievements === 8, "업그레이드 또는 업적 개수가 다릅니다.");
+    assert(started.version === 3 && started.label === "픽셀 광산" && started.selectedOreId === "coal", "v3 로컬 세이브가 생성되지 않았습니다.");
+    assert(started.upgrades === 7 && started.achievements === 13, "업그레이드 또는 업적 개수가 다릅니다.");
     assert(started.storageStatus.includes("사용 가능"), "HTTP localStorage가 사용 가능 상태가 아닙니다.");
-    pass("게임 시작 후 v1 세이브, 업그레이드 6종, 업적 8종을 초기화한다");
+    pass("게임 시작 후 v3 세이브, 선택 광맥, 일반 업그레이드 6종, 광맥 마일스톤, 업적 13종을 초기화한다");
     assert(started.persistenceStatus.includes("승인") || started.persistenceStatus.includes("삭제 가능"), "저장 보호 결과가 표시되지 않았습니다.");
     assert(started.storageUsage.includes("Origin") && started.saveSize.includes("UTF-8 JSON"), "Origin 사용량과 세이브 크기가 구분되지 않았습니다.");
     pass("저장 보호 결과, Origin 예상 사용량, 세이브 UTF-8 크기를 구분해 표시한다");
@@ -286,12 +288,15 @@ async function run() {
     const featureNavigation = await page.evaluate(`(() => {
       const gameApp = document.getElementById('gameApp');
       const topbar = document.querySelector('.topbar');
+      const mineralCatalogList = document.getElementById('mineralCatalogList');
       const achievementList = document.getElementById('achievementList');
       const saveActions = document.querySelector('.save-actions');
+      const catalogButton = document.getElementById('mineralCatalogMenuButton');
       const achievementButton = document.getElementById('achievementsMenuButton');
       const saveButton = document.getElementById('saveMenuButton');
       const saveDialog = document.getElementById('saveManagementDialog');
       return {
+        mineralCatalogOutsideGame: !gameApp.contains(mineralCatalogList),
         achievementOutsideGame: !gameApp.contains(achievementList),
         saveOutsideGame: !gameApp.contains(saveActions),
         coreStatsInTopbar: ['currencyValue', 'perClickValue', 'perSecondValue'].every((id) => topbar.contains(document.getElementById(id))),
@@ -299,30 +304,40 @@ async function run() {
         visibleBrandRemoved: !topbar.querySelector('.topbar-title, .topbar-korean, .eyebrow'),
         accessibleTitle: Boolean(topbar.querySelector('h1.visually-hidden')),
         manualSaveMoved: !topbar.contains(document.getElementById('manualSaveButton')) && saveDialog.contains(document.getElementById('manualSaveButton')),
+        purchaseModes: document.querySelectorAll('[data-purchase-mode]').length,
+        defaultPurchaseMode: document.querySelector('[data-purchase-mode="one"]').getAttribute('aria-pressed'),
+        purchaseToolbarInShop: document.querySelector('.shop-section').contains(document.querySelector('.purchase-toolbar')),
         summaryOrder: [...document.querySelectorAll('.mine-summary > span:not(.mine-summary-separator)')].map((item) => item.textContent.trim()),
         menuButtons: document.querySelectorAll('.utility-menu-button').length,
+        catalogBeforeAchievement: catalogButton.nextElementSibling === achievementButton,
+        catalogControls: catalogButton.getAttribute('aria-controls'),
         achievementControls: achievementButton.getAttribute('aria-controls'),
         saveControls: saveButton.getAttribute('aria-controls'),
-        dialogsClosed: !document.getElementById('achievementsDialog').open && !document.getElementById('saveManagementDialog').open
+        dialogsClosed: !document.getElementById('mineralCatalogDialog').open && !document.getElementById('achievementsDialog').open && !document.getElementById('saveManagementDialog').open
       };
     })()`);
     assert(
-      featureNavigation.achievementOutsideGame && featureNavigation.saveOutsideGame && featureNavigation.dialogsClosed,
-      `업적 또는 저장 기능이 게임 본문에서 분리되지 않았습니다: ${JSON.stringify(featureNavigation)}`,
+      featureNavigation.mineralCatalogOutsideGame && featureNavigation.achievementOutsideGame && featureNavigation.saveOutsideGame && featureNavigation.dialogsClosed,
+      `도감, 업적 또는 저장 기능이 게임 본문에서 분리되지 않았습니다: ${JSON.stringify(featureNavigation)}`,
     );
     assert(
-      featureNavigation.menuButtons === 2 &&
+      featureNavigation.menuButtons === 3 &&
+      featureNavigation.catalogBeforeAchievement &&
+      featureNavigation.catalogControls === "mineralCatalogDialog" &&
       featureNavigation.achievementControls === "achievementsDialog" &&
       featureNavigation.saveControls === "saveManagementDialog",
       "상단 아이콘 메뉴와 다이얼로그 연결이 올바르지 않습니다.",
     );
-    pass("업적과 저장 기능을 게임 본문에서 분리하고 상단 아이콘 메뉴 두 개에 연결한다");
+    pass("도감 버튼을 업적 왼쪽에 배치하고 도감·업적·저장 기능을 상단 아이콘 메뉴에 연결한다");
     assert(
       featureNavigation.coreStatsInTopbar &&
         featureNavigation.legacyStatsRemoved &&
         featureNavigation.visibleBrandRemoved &&
         featureNavigation.accessibleTitle &&
-        featureNavigation.manualSaveMoved,
+        featureNavigation.manualSaveMoved &&
+        featureNavigation.purchaseModes === 3 &&
+        featureNavigation.defaultPurchaseMode === "true" &&
+        featureNavigation.purchaseToolbarInShop,
       `컴팩트 상단 구조가 올바르지 않습니다: ${JSON.stringify(featureNavigation)}`,
     );
     assert(
@@ -334,6 +349,43 @@ async function run() {
     );
     pass("핵심 통계 3개를 상단에 합치고 누적 통계와 수동 저장을 요청한 위치로 이동한다");
 
+    await page.evaluate("document.getElementById('mineralCatalogMenuButton').click(); true");
+    await waitFor(page, "document.getElementById('mineralCatalogDialog').open");
+    const initialCatalog = await page.evaluate(`(() => ({
+      expanded: document.getElementById('mineralCatalogMenuButton').getAttribute('aria-expanded'),
+      badge: document.getElementById('mineralCatalogMenuBadge').textContent,
+      count: document.getElementById('mineralCatalogCount').textContent,
+      cards: document.querySelectorAll('#mineralCatalogDialog .mineral-card').length,
+      unlocked: document.querySelectorAll('#mineralCatalogDialog .mineral-card.is-unlocked').length,
+      current: document.querySelector('#mineralCatalogDialog .mineral-card.is-current')?.dataset.mineralId,
+      ore: document.getElementById('mineSection').dataset.ore,
+      shaft: document.getElementById('mineShaftEyebrow').textContent,
+      selectButtons: document.querySelectorAll('#mineralCatalogDialog .mineral-select-button').length,
+      coalSelectDisabled: document.querySelector('[data-mineral-id="coal"] .mineral-select-button').disabled,
+      canvasesValid: [...document.querySelectorAll('#mineralCatalogDialog canvas')].every((canvas) => canvas.width === 24 && canvas.height === 24),
+      uniqueSprites: new Set([...document.querySelectorAll('#mineralCatalogDialog canvas')].map((canvas) => canvas.toDataURL())).size
+    }))()`);
+    assert(
+      initialCatalog.expanded === "true" &&
+        initialCatalog.badge === "1/6" &&
+        initialCatalog.count === "1 / 6" &&
+        initialCatalog.cards === 6 &&
+        initialCatalog.unlocked === 1 &&
+        initialCatalog.current === "coal" &&
+        initialCatalog.ore === "coal" &&
+        initialCatalog.shaft.includes("01") &&
+        initialCatalog.selectButtons === 6 &&
+        initialCatalog.coalSelectDisabled &&
+        initialCatalog.canvasesValid &&
+        initialCatalog.uniqueSprites === 6,
+      `초기 광물 도감 또는 석탄 광맥 구성이 올바르지 않습니다: ${JSON.stringify(initialCatalog)}`,
+    );
+    const mineralCatalogScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(MINERAL_CATALOG_SCREENSHOT_PATH, Buffer.from(mineralCatalogScreenshot.data, "base64"));
+    await page.evaluate("document.querySelector('[data-close-dialog=\"mineralCatalogDialog\"]').click(); true");
+    await waitFor(page, "!document.getElementById('mineralCatalogDialog').open && document.getElementById('mineralCatalogMenuButton').getAttribute('aria-expanded') === 'false'");
+    pass("초기 석탄 광맥과 6칸 광물 도감을 표시하고 발견 상태를 1/6로 계산한다");
+
     await page.evaluate("document.getElementById('achievementsMenuButton').click(); true");
     await waitFor(page, "document.getElementById('achievementsDialog').open");
     const achievementMenu = await page.evaluate(`(() => ({
@@ -343,7 +395,7 @@ async function run() {
       cards: document.querySelectorAll('#achievementsDialog .achievement-card').length
     }))()`);
     assert(
-      achievementMenu.expanded === "true" && achievementMenu.badge === "0" && achievementMenu.count === "0 / 8" && achievementMenu.cards === 8,
+      achievementMenu.expanded === "true" && achievementMenu.badge === "0" && achievementMenu.count === "0 / 13" && achievementMenu.cards === 13,
       `업적 팝업 내용이 올바르지 않습니다: ${JSON.stringify(achievementMenu)}`,
     );
     const achievementScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
@@ -464,16 +516,16 @@ async function run() {
     await page.evaluate("document.getElementById('saveMenuButton').click(); true");
     await waitFor(page, "document.getElementById('saveManagementDialog').open");
     await page.evaluate("document.getElementById('exportButton').click(); true");
-    await waitFor(page, "document.getElementById('saveManagementDialog').open && document.getElementById('exportDialog').open && document.getElementById('exportCode').value.startsWith('PIXELMINE-V1:')");
+    await waitFor(page, "document.getElementById('saveManagementDialog').open && document.getElementById('exportDialog').open && document.getElementById('exportCode').value.startsWith('PIXELMINE-V3:')");
     const saveCode = await page.evaluate("document.getElementById('exportCode').value");
-    const decoded = JSON.parse(Buffer.from(saveCode.slice("PIXELMINE-V1:".length), "base64").toString("utf8"));
-    assert(decoded.version === 1 && decoded.meta.label === "픽셀 광산", "UTF-8 세이브 코드가 한글 메타데이터를 보존하지 못했습니다.");
+    const decoded = JSON.parse(Buffer.from(saveCode.slice("PIXELMINE-V3:".length), "base64").toString("utf8"));
+    assert(decoded.version === 3 && decoded.meta.label === "픽셀 광산", "UTF-8 세이브 코드가 한글 메타데이터를 보존하지 못했습니다.");
     pass("UTF-8 JSON 세이브 코드를 Base64로 내보내고 한글을 보존한다");
 
     await page.evaluate(`(() => {
       document.getElementById('exportDialog').close();
       document.getElementById('importOpenButton').click();
-      document.getElementById('importCode').value = 'PIXELMINE-V2:QUFBQQ==';
+      document.getElementById('importCode').value = 'PIXELMINE-V4:QUFBQQ==';
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
@@ -517,16 +569,60 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 1");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 3");
     const migratedLegacy = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
-      return { version: save.version, currency: save.data.currency, clicks: save.data.totalClicks, level: save.data.upgrades.worn_pickaxe };
+      return { version: save.version, currency: save.data.currency, clicks: save.data.totalClicks, level: save.data.upgrades.worn_pickaxe, selectedOreId: save.data.selectedOreId };
     })()`);
     assert(
-      migratedLegacy.version === 1 && migratedLegacy.currency === 42 && migratedLegacy.clicks === 7 && migratedLegacy.level === 2,
+      migratedLegacy.version === 3 && migratedLegacy.currency === 42 && migratedLegacy.clicks === 7 && migratedLegacy.level === 2 && migratedLegacy.selectedOreId === "coal",
       `v0 저장 마이그레이션 결과가 올바르지 않습니다: ${JSON.stringify(migratedLegacy)}`,
     );
-    pass("v0 레거시 저장을 정의된 마이그레이션을 통해 v1 스키마로 복원한다");
+    pass("v0 레거시 저장을 정의된 마이그레이션을 통해 v3 스키마로 복원한다");
+
+    const legacyV1Payload = JSON.parse(JSON.stringify(decoded));
+    legacyV1Payload.version = 1;
+    delete legacyV1Payload.data.upgrades.ore_milestone;
+    delete legacyV1Payload.data.selectedOreId;
+    const legacyV1Code = `PIXELMINE-V1:${Buffer.from(JSON.stringify(legacyV1Payload), "utf8").toString("base64")}`;
+    await page.evaluate(`(() => {
+      document.getElementById('importOpenButton').click();
+      document.getElementById('importCode').value = ${JSON.stringify(legacyV1Code)};
+      document.getElementById('confirmImportButton').click();
+      return true;
+    })()`);
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 3");
+    const migratedV1 = await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      return { version: save.version, milestone: save.data.upgrades.ore_milestone, selectedOreId: save.data.selectedOreId, ore: document.getElementById('mineSection').dataset.ore };
+    })()`);
+    assert(
+      migratedV1.version === 3 && migratedV1.milestone === 0 && migratedV1.selectedOreId === "coal" && migratedV1.ore === "coal",
+      `v1 광맥 진행도 기본값 마이그레이션이 올바르지 않습니다: ${JSON.stringify(migratedV1)}`,
+    );
+    pass("기존 v1 세이브에 광맥 개척과 선택 광맥 기본값을 보완해 v3로 자동 이관한다");
+
+    const legacyV2Payload = JSON.parse(JSON.stringify(decoded));
+    legacyV2Payload.version = 2;
+    legacyV2Payload.data.upgrades.ore_milestone = 3;
+    delete legacyV2Payload.data.selectedOreId;
+    const legacyV2Code = `PIXELMINE-V2:${Buffer.from(JSON.stringify(legacyV2Payload), "utf8").toString("base64")}`;
+    await page.evaluate(`(() => {
+      document.getElementById('importOpenButton').click();
+      document.getElementById('importCode').value = ${JSON.stringify(legacyV2Code)};
+      document.getElementById('confirmImportButton').click();
+      return true;
+    })()`);
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 3");
+    const migratedV2 = await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      return { milestone: save.data.upgrades.ore_milestone, selectedOreId: save.data.selectedOreId, ore: document.getElementById('mineSection').dataset.ore };
+    })()`);
+    assert(
+      migratedV2.milestone === 3 && migratedV2.selectedOreId === "gold" && migratedV2.ore === "gold",
+      `v2 선택 광맥 마이그레이션이 올바르지 않습니다: ${JSON.stringify(migratedV2)}`,
+    );
+    pass("기존 v2 세이브는 가장 높은 발견 광맥을 선택한 v3 상태로 자동 이관한다");
 
     await page.evaluate(`(() => {
       document.getElementById('importOpenButton').click();
@@ -560,7 +656,7 @@ async function run() {
     }))()`);
     assert(resumed.level === 1 && resumed.clicks === 13 && resumed.musicEnabled === true && resumed.shown === "6", "새로고침 복원 결과가 일치하지 않습니다.");
     pass("새로고침 후에도 시작 버튼을 거쳐 기존 진행도를 복원한다");
-    pass("배경음악 필드가 없는 기존 v1 세이브를 기본 활성 상태로 보완한다");
+    pass("배경음악 필드가 없는 기존 세이브를 기본 활성 상태로 보완한다");
 
     await reload(page);
     await page.evaluate(`(() => {
@@ -607,6 +703,141 @@ async function run() {
     assert(reversedClock.offlineEarned === 0 && !reversedClock.dialogOpen, "과거 방향 시간 차이에 오프라인 수익을 지급했습니다.");
     pass("시스템 시각이 저장 시각보다 과거이면 오프라인 수익을 0으로 처리한다");
 
+    await reload(page);
+    await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      save.data.currency = 14_000_000_000;
+      save.data.totalCurrencyEarned = Math.max(save.data.totalCurrencyEarned, 14_000_000_000);
+      save.data.upgrades.ore_milestone = 0;
+      save.data.selectedOreId = 'coal';
+      save.data.lastProcessedAt = Date.now();
+      localStorage.setItem('pixelMine.save', JSON.stringify(save));
+      return true;
+    })()`);
+    await startGame(page);
+    await waitFor(page, "!document.getElementById('gameApp').classList.contains('is-hidden')");
+    const coalSprite = await page.evaluate("document.getElementById('oreCanvas').toDataURL()");
+    const initialMilestonePrice = await page.evaluate(`(() => ({
+      text: document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-buy-cost').textContent,
+      exact: document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-buy-cost').title
+    }))()`);
+    assert(initialMilestonePrice.text === "25만 광석" && initialMilestonePrice.exact === "250,000", "브론즈 마일스톤 비용이 250,000 광석이 아닙니다.");
+    await page.evaluate(`(() => {
+      document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-buy').click();
+      document.getElementById('manualSaveButton').click();
+      return true;
+    })()`);
+    await waitFor(page, "JSON.parse(localStorage.getItem('pixelMine.save')).data.upgrades.ore_milestone === 1");
+    await page.evaluate("document.getElementById('mineralCatalogMenuButton').click(); true");
+    await waitFor(page, "document.getElementById('mineralCatalogDialog').open");
+    const bronzeMilestone = await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      return {
+        level: save.data.upgrades.ore_milestone,
+        selectedOreId: save.data.selectedOreId,
+        discoveryAchievement: save.data.unlockedAchievements.discover_bronze,
+        ore: document.getElementById('mineSection').dataset.ore,
+        shaft: document.getElementById('mineShaftEyebrow').textContent,
+        label: document.getElementById('mineButtonLabel').textContent,
+        badge: document.getElementById('mineralCatalogMenuBadge').textContent,
+        unlocked: document.querySelectorAll('.mineral-card.is-unlocked').length,
+        current: document.querySelector('.mineral-card.is-current')?.dataset.mineralId,
+        sprite: document.getElementById('oreCanvas').toDataURL(),
+        milestoneStage: document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-level').textContent
+      };
+    })()`);
+    assert(
+      bronzeMilestone.level === 1 &&
+        bronzeMilestone.selectedOreId === "bronze" &&
+        bronzeMilestone.discoveryAchievement > 0 &&
+        bronzeMilestone.ore === "bronze" &&
+        bronzeMilestone.shaft.includes("02") &&
+        bronzeMilestone.label === "브론즈 채굴" &&
+        bronzeMilestone.badge === "2/6" &&
+        bronzeMilestone.unlocked === 2 &&
+        bronzeMilestone.current === "bronze" &&
+        bronzeMilestone.sprite !== coalSprite &&
+        bronzeMilestone.milestoneStage === "STAGE 2/6",
+      `브론즈 광맥 마일스톤 적용이 올바르지 않습니다: ${JSON.stringify(bronzeMilestone)}`,
+    );
+    await page.evaluate(`(() => {
+      document.querySelector('[data-mineral-id="coal"] .mineral-select-button').click();
+      document.getElementById('manualSaveButton').click();
+      return true;
+    })()`);
+    const reselectedCoal = await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      return {
+        selectedOreId: save.data.selectedOreId,
+        ore: document.getElementById('mineSection').dataset.ore,
+        badge: document.getElementById('mineralCatalogMenuBadge').textContent,
+        current: document.querySelector('.mineral-card.is-current')?.dataset.mineralId,
+        bronzeSelectable: !document.querySelector('[data-mineral-id="bronze"] .mineral-select-button').disabled
+      };
+    })()`);
+    assert(
+      reselectedCoal.selectedOreId === "coal" && reselectedCoal.ore === "coal" && reselectedCoal.badge === "2/6" && reselectedCoal.current === "coal" && reselectedCoal.bronzeSelectable,
+      `발견 광맥 재선택 결과가 올바르지 않습니다: ${JSON.stringify(reselectedCoal)}`,
+    );
+    await page.evaluate("document.querySelector('[data-close-dialog=\"mineralCatalogDialog\"]').click(); true");
+    pass("발견한 브론즈 광맥에서 석탄 외형을 다시 선택하고 v3 세이브에 보존한다");
+
+    await page.evaluate("document.querySelector('[data-purchase-mode=\"max\"]').click(); true");
+    const maxMilestoneOffer = await page.evaluate(`(() => ({
+      count: document.querySelector('[data-upgrade-id="ore_milestone"]').dataset.purchaseCount,
+      exact: document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-buy-cost').title,
+      pressed: document.querySelector('[data-purchase-mode="max"]').getAttribute('aria-pressed')
+    }))()`);
+    assert(
+      maxMilestoneOffer.count === "4" && maxMilestoneOffer.exact === "12,935,000,000" && maxMilestoneOffer.pressed === "true",
+      `남은 광맥 최대 구매 비용 계산이 올바르지 않습니다: ${JSON.stringify(maxMilestoneOffer)}`,
+    );
+    await page.evaluate(`(() => {
+      document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-buy').click();
+      document.getElementById('manualSaveButton').click();
+      return true;
+    })()`);
+    await waitFor(page, "JSON.parse(localStorage.getItem('pixelMine.save')).data.upgrades.ore_milestone === 5");
+    const fullCatalog = await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      const discoveryIds = ['discover_bronze', 'discover_iron', 'discover_gold', 'discover_ruby', 'discover_diamond'];
+      return {
+        selectedOreId: save.data.selectedOreId,
+        ore: document.getElementById('mineSection').dataset.ore,
+        badge: document.getElementById('mineralCatalogMenuBadge').textContent,
+        discoveries: discoveryIds.every((id) => save.data.unlockedAchievements[id] > 0),
+        milestoneMax: document.querySelector('[data-upgrade-id="ore_milestone"] .upgrade-buy-cost').textContent
+      };
+    })()`);
+    assert(
+      fullCatalog.selectedOreId === "diamond" && fullCatalog.ore === "diamond" && fullCatalog.badge === "6/6" && fullCatalog.discoveries && fullCatalog.milestoneMax === "MAX",
+      `광물 전체 발견 또는 발견 업적 결과가 올바르지 않습니다: ${JSON.stringify(fullCatalog)}`,
+    );
+    pass("최대 구매로 남은 4단계를 일괄 개척하고 광물 발견 업적 5종을 해금한다");
+
+    const bulkLevels = await page.evaluate(`(() => {
+      document.querySelector('[data-purchase-mode="ten"]').click();
+      const saveBeforeTen = JSON.parse(localStorage.getItem('pixelMine.save'));
+      const wornBefore = saveBeforeTen.data.upgrades.worn_pickaxe;
+      const tenCount = Number(document.querySelector('[data-upgrade-id="worn_pickaxe"]').dataset.purchaseCount);
+      document.querySelector('[data-upgrade-id="worn_pickaxe"] .upgrade-buy').click();
+      document.getElementById('manualSaveButton').click();
+      const wornAfter = JSON.parse(localStorage.getItem('pixelMine.save')).data.upgrades.worn_pickaxe;
+
+      document.querySelector('[data-purchase-mode="max"]').click();
+      const steelBefore = JSON.parse(localStorage.getItem('pixelMine.save')).data.upgrades.steel_pickaxe;
+      const maxCount = Number(document.querySelector('[data-upgrade-id="steel_pickaxe"]').dataset.purchaseCount);
+      document.querySelector('[data-upgrade-id="steel_pickaxe"] .upgrade-buy').click();
+      document.getElementById('manualSaveButton').click();
+      const steelAfter = JSON.parse(localStorage.getItem('pixelMine.save')).data.upgrades.steel_pickaxe;
+      return { wornBefore, wornAfter, tenCount, steelBefore, steelAfter, maxCount };
+    })()`);
+    assert(
+      bulkLevels.tenCount === 10 && bulkLevels.wornAfter - bulkLevels.wornBefore === 10 && bulkLevels.maxCount > 1 && bulkLevels.steelAfter - bulkLevels.steelBefore === bulkLevels.maxCount,
+      `10개 또는 최대 일괄 구매 결과가 올바르지 않습니다: ${JSON.stringify(bulkLevels)}`,
+    );
+    pass("일반 업그레이드를 10개 및 보유 광석 기준 최대 수량으로 일괄 구매한다");
+
     await page.evaluate(`(() => {
       localStorage.setItem('unrelated.key', 'keep');
       document.getElementById('resetOpenButton').click();
@@ -621,11 +852,17 @@ async function run() {
       return {
         unrelated: localStorage.getItem('unrelated.key'),
         currency: save.data.currency,
-        levels: Object.values(save.data.upgrades)
+        levels: Object.values(save.data.upgrades),
+        selectedOreId: save.data.selectedOreId,
+        ore: document.getElementById('mineSection').dataset.ore,
+        catalogBadge: document.getElementById('mineralCatalogMenuBadge').textContent
       };
     })()`);
     assert(resetResult.unrelated === "keep", "초기화가 게임 외 localStorage 키를 삭제했습니다.");
-    assert(resetResult.currency === 0 && resetResult.levels.every((level) => level === 0), "초기화 후 새 게임 상태가 아닙니다.");
+    assert(
+      resetResult.currency === 0 && resetResult.levels.every((level) => level === 0) && resetResult.selectedOreId === "coal" && resetResult.ore === "coal" && resetResult.catalogBadge === "1/6",
+      "초기화 후 새 게임 상태가 아닙니다.",
+    );
     pass("확인 절차를 거친 초기화가 게임 상태만 재설정하고 다른 키를 보존한다");
 
     await reload(page);
@@ -640,7 +877,7 @@ async function run() {
       currentVersion: JSON.parse(localStorage.getItem('pixelMine.save')).version,
       currentCurrency: JSON.parse(localStorage.getItem('pixelMine.save')).data.currency
     }))()`);
-    assert(corrupt.quarantined === "{broken" && corrupt.currentVersion === 1 && corrupt.currentCurrency === 0, "손상 저장 격리 또는 새 게임 폴백에 실패했습니다.");
+    assert(corrupt.quarantined === "{broken" && corrupt.currentVersion === 3 && corrupt.currentCurrency === 0, "손상 저장 격리 또는 새 게임 폴백에 실패했습니다.");
     pass("손상 JSON 원문을 별도 키에 격리하고 유효한 새 게임으로 폴백한다");
 
     await reload(page);
@@ -655,8 +892,10 @@ async function run() {
         miner: 6,
         mine_cart: 3,
         auto_drill: 1,
-        crystal_core: 0
+        crystal_core: 0,
+        ore_milestone: 5
       };
+      save.data.selectedOreId = 'diamond';
       save.data.lastProcessedAt = Date.now();
       localStorage.setItem('pixelMine.save', JSON.stringify(save));
       return true;
@@ -669,6 +908,8 @@ async function run() {
       topbarHeight: document.querySelector('.topbar').getBoundingClientRect().height,
       contentOffset: document.querySelector('.main-grid').getBoundingClientRect().top - document.querySelector('.topbar').getBoundingClientRect().top,
       topbarStats: document.querySelectorAll('.topbar-stat').length,
+      ore: document.getElementById('mineSection').dataset.ore,
+      catalogBadge: document.getElementById('mineralCatalogMenuBadge').textContent,
       summaryText: document.querySelector('.mine-summary').textContent.replace(/\s+/g, ' ').trim()
     }))()`);
     assert(desktopLayout.noHorizontalOverflow, "데스크톱 화면에 가로 오버플로가 있습니다.");
@@ -677,6 +918,7 @@ async function run() {
       desktopLayout.topbarHeight <= 105 && desktopLayout.contentOffset <= 140 && desktopLayout.topbarStats === 3,
       `데스크톱 상단이 충분히 컴팩트하지 않습니다: ${JSON.stringify(desktopLayout)}`,
     );
+    assert(desktopLayout.ore === "diamond" && desktopLayout.catalogBadge === "6/6", "다이아 최종 광맥 또는 도감 6/6 표시가 올바르지 않습니다.");
     assert(
       desktopLayout.summaryText.includes("누적 채굴 5만") && desktopLayout.summaryText.includes("총 클릭 321회") && desktopLayout.summaryText.includes("오프라인 수익"),
       `데스크톱 광맥 요약 표시가 올바르지 않습니다: ${desktopLayout.summaryText}`,

@@ -111,6 +111,24 @@
         <span id="saveIndicator" class="save-indicator" aria-live="polite">시작 준비</span>
         <nav class="utility-menu" aria-label="게임 기능 메뉴">
           <button
+            id="mineralCatalogMenuButton"
+            class="utility-menu-button"
+            type="button"
+            aria-label="광물 도감 열기, 1/6 발견"
+            aria-haspopup="dialog"
+            aria-controls="mineralCatalogDialog"
+            aria-expanded="false"
+            data-tooltip="광물 도감"
+            title="광물 도감"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 4h6c2 0 3 1 3 3v13c0-2-1-3-3-3H4V4Z"></path>
+              <path d="M20 4h-3c-2 0-4 1-4 3v13c0-2 2-3 4-3h3V4Z"></path>
+              <path d="m17 7 2 2-2 2-2-2 2-2Z"></path>
+            </svg>
+            <span id="mineralCatalogMenuBadge" class="utility-menu-badge utility-menu-badge--fraction" aria-hidden="true">1/6</span>
+          </button>
+          <button
             id="achievementsMenuButton"
             class="utility-menu-button"
             type="button"
@@ -150,20 +168,24 @@
     <div id="sessionWarning" class="session-warning is-hidden" role="alert"></div>
 
     <div class="main-grid">
-      <section class="mine-section pixel-panel" aria-labelledby="mineHeading">
+      <section id="mineSection" class="mine-section pixel-panel" aria-labelledby="mineHeading" data-ore="coal">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">MINE SHAFT 01</p>
+            <p id="mineShaftEyebrow" class="eyebrow">MINE SHAFT 01</p>
             <h2 id="mineHeading">광맥 채굴</h2>
           </div>
-          <span class="section-badge">ACTIVE</span>
+          <span id="currentOreBadge" class="section-badge">석탄 · 1/6</span>
         </div>
 
-        <div class="mine-stage">
+        <div id="mineStage" class="mine-stage">
           <div class="cave-dots" aria-hidden="true"></div>
+          <div class="ore-stage-marker" aria-live="polite">
+            <span id="currentOreStageLabel">STAGE 01</span>
+            <strong id="currentOreName">석탄</strong>
+          </div>
           <button id="mineButton" class="mine-button" type="button" aria-label="광맥을 채굴해 광석 획득">
             <canvas id="oreCanvas" width="24" height="24" aria-hidden="true"></canvas>
-            <span class="mine-button-label">광맥 채굴</span>
+            <span id="mineButtonLabel" class="mine-button-label">석탄 채굴</span>
             <span id="mineGainLabel" class="mine-button-gain">+1 광석</span>
           </button>
         </div>
@@ -183,14 +205,25 @@
             <p class="eyebrow">UPGRADE SHOP</p>
             <h2 id="shopHeading">광산 상점</h2>
           </div>
-          <span class="section-badge">6 ITEMS</span>
+          <span class="section-badge">7 ITEMS</span>
+        </div>
+        <div class="purchase-toolbar">
+          <div>
+            <strong>구매 수량</strong>
+            <span>선택 수량 안에서 살 수 있는 만큼 한 번에 구매합니다.</span>
+          </div>
+          <div class="purchase-mode-buttons" role="group" aria-label="업그레이드 구매 수량">
+            <button class="purchase-mode-button" type="button" data-purchase-mode="one" aria-pressed="true">1개</button>
+            <button class="purchase-mode-button" type="button" data-purchase-mode="ten" aria-pressed="false">10개</button>
+            <button class="purchase-mode-button" type="button" data-purchase-mode="max" aria-pressed="false">최대</button>
+          </div>
         </div>
         <div id="upgradeList" class="upgrade-list"></div>
       </section>
     </div>
 
     <footer class="game-footer">
-      <span>PIXEL MINE v1.0</span>
+      <span>PIXEL MINE v1.2</span>
       <span>NO LOGIN · NO CLOUD · LOCAL SAVE</span>
     </footer>
   </main>
@@ -202,6 +235,38 @@
     aria-atomic="false"
     aria-relevant="additions text"
   ></div>
+
+  <dialog
+    id="mineralCatalogDialog"
+    class="pixel-dialog pixel-dialog--feature"
+    aria-labelledby="mineralCatalogHeading"
+    data-trigger="mineralCatalogMenuButton"
+  >
+    <div class="dialog-content feature-dialog-content">
+      <button
+        class="dialog-icon-close"
+        type="button"
+        aria-label="광물 도감 닫기"
+        data-close-dialog="mineralCatalogDialog"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M5 5 19 19M19 5 5 19"></path>
+        </svg>
+      </button>
+      <div class="section-heading feature-dialog-heading">
+        <div>
+          <p class="eyebrow">MINERAL ARCHIVE</p>
+          <h2 id="mineralCatalogHeading">광물 도감</h2>
+          <p class="feature-dialog-description">발견한 광물을 선택해 채굴 화면에 다시 적용하거나 다음 광맥의 해금 조건을 확인합니다.</p>
+        </div>
+        <span id="mineralCatalogCount" class="section-badge">1 / 6</span>
+      </div>
+      <div id="mineralCatalogList" class="mineral-grid"></div>
+      <div class="dialog-actions feature-dialog-actions">
+        <button class="pixel-button dialog-close" type="button" data-close-dialog="mineralCatalogDialog">게임으로 돌아가기</button>
+      </div>
+    </div>
+  </dialog>
 
   <dialog
     id="achievementsDialog"
@@ -226,7 +291,7 @@
           <h2 id="achievementsHeading">업적 기록</h2>
           <p class="feature-dialog-description">채굴하며 달성한 기록과 해금 시각을 확인합니다.</p>
         </div>
-        <span id="achievementCount" class="section-badge">0 / 8</span>
+        <span id="achievementCount" class="section-badge">0 / 13</span>
       </div>
       <div id="achievementList" class="achievement-grid"></div>
       <div class="dialog-actions feature-dialog-actions">
@@ -353,7 +418,7 @@
       <h2>세이브 코드 불러오기</h2>
       <p id="importDialogDescription">검증이 완료된 코드만 현재 진행도를 대체합니다. 불러오기 전에 현재 세이브를 내보내는 것을 권장합니다.</p>
       <label class="field-label" for="importCode">세이브 코드 붙여넣기</label>
-      <textarea id="importCode" class="save-code-field" rows="8" spellcheck="false" autocomplete="off" placeholder="PIXELMINE-V1:..."></textarea>
+      <textarea id="importCode" class="save-code-field" rows="8" spellcheck="false" autocomplete="off" placeholder="PIXELMINE-V3:..."></textarea>
       <p id="importStatus" class="dialog-status" aria-live="polite"></p>
       <div class="dialog-actions">
         <button id="confirmImportButton" class="pixel-button pixel-button--primary" type="button">검증 후 불러오기</button>
@@ -366,7 +431,7 @@
     <div class="dialog-content">
       <p class="eyebrow">DANGER ZONE</p>
       <h2>게임 초기화</h2>
-      <p>보유 광석, 업그레이드, 업적이 모두 사라집니다. 이 작업은 되돌릴 수 없습니다.</p>
+      <p>보유 광석, 업그레이드, 업적, 광물 도감 기록이 모두 사라집니다. 이 작업은 되돌릴 수 없습니다.</p>
       <label class="confirm-row" for="resetConfirm">
         <input id="resetConfirm" type="checkbox">
         <span>현재 진행도를 삭제하고 새 게임을 시작하겠습니다.</span>

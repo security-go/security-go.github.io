@@ -521,6 +521,12 @@ input:focus-visible {
   line-height: 1;
 }
 
+.utility-menu-badge--fraction {
+  right: -11px;
+  min-width: 30px;
+  font-size: 0.4rem;
+}
+
 .save-indicator {
   min-width: 110px;
   overflow: hidden;
@@ -585,6 +591,24 @@ input:focus-visible {
   padding: 22px;
 }
 
+.mine-section {
+  --mine-accent: #69747c;
+  --mine-secondary: #303840;
+  --mine-stage: #1a2025;
+  --mine-wall: #3d4650;
+  --mine-contrast: #f3e7c5;
+}
+
+.mine-section .eyebrow,
+.mine-summary-separator {
+  color: var(--mine-accent);
+}
+
+#currentOreBadge {
+  color: var(--mine-contrast);
+  background: var(--mine-accent);
+}
+
 .section-heading {
   display: flex;
   align-items: flex-start;
@@ -607,8 +631,8 @@ input:focus-visible {
   overflow: hidden;
   place-items: center;
   border: 4px solid var(--ink);
-  background: var(--cave);
-  box-shadow: inset 0 0 0 8px var(--slate);
+  background: var(--mine-stage);
+  box-shadow: inset 0 0 0 8px var(--mine-wall);
 }
 
 .mine-stage::before,
@@ -639,8 +663,12 @@ input:focus-visible {
   width: 8px;
   height: 8px;
   content: "";
-  background: var(--gold);
-  box-shadow: 54px 26px 0 var(--ore), 112px -8px 0 var(--moss), 184px 44px 0 var(--gold), 232px -24px 0 var(--ore);
+  background: var(--mine-accent);
+  box-shadow:
+    54px 26px 0 var(--mine-secondary),
+    112px -8px 0 var(--mine-accent),
+    184px 44px 0 var(--mine-secondary),
+    232px -24px 0 var(--mine-accent);
 }
 
 .cave-dots {
@@ -659,6 +687,34 @@ input:focus-visible {
   top: 185px;
   left: -4px;
   opacity: 0.42;
+}
+
+.ore-stage-marker {
+  position: absolute;
+  z-index: 3;
+  top: 18px;
+  left: 18px;
+  display: grid;
+  gap: 4px;
+  min-width: 104px;
+  padding: 8px 10px;
+  border: 3px solid var(--ink);
+  color: var(--mine-contrast);
+  background: var(--mine-secondary);
+  box-shadow: 4px 4px 0 var(--ink);
+  pointer-events: none;
+}
+
+.ore-stage-marker span {
+  font-family: var(--font-pixel);
+  font-size: 0.45rem;
+  line-height: 1.5;
+}
+
+.ore-stage-marker strong {
+  color: var(--paper);
+  font-size: 0.84rem;
+  line-height: 1.25;
 }
 
 .mine-button {
@@ -699,13 +755,13 @@ input:focus-visible {
   padding: 8px 12px;
   border: 3px solid var(--paper);
   background: var(--ink);
-  box-shadow: 4px 4px 0 var(--ore);
+  box-shadow: 4px 4px 0 var(--mine-accent);
   font-weight: 900;
 }
 
 .mine-button-gain {
   margin-top: 10px;
-  color: var(--gold);
+  color: var(--mine-accent);
   font-family: var(--font-pixel);
   font-size: 0.65rem;
 }
@@ -716,7 +772,7 @@ input:focus-visible {
   top: 38%;
   left: 50%;
   pointer-events: none;
-  color: var(--gold);
+  color: var(--mine-accent);
   font-family: var(--font-pixel);
   font-size: 0.7rem;
   text-shadow: 2px 2px 0 var(--ink);
@@ -748,8 +804,67 @@ input:focus-visible {
 
 .mine-summary-separator {
   margin: 0 6px;
-  color: var(--ore);
   font-weight: 900;
+}
+
+.purchase-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 3px solid var(--ink);
+  background: #f5dfb1;
+  box-shadow: 3px 3px 0 var(--slate);
+}
+
+.purchase-toolbar strong,
+.purchase-toolbar span {
+  display: block;
+}
+
+.purchase-toolbar strong {
+  font-size: 0.8rem;
+}
+
+.purchase-toolbar span {
+  margin-top: 2px;
+  color: var(--slate);
+  font-size: 0.68rem;
+}
+
+.purchase-mode-buttons {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(3, minmax(58px, 1fr));
+  gap: 6px;
+}
+
+.purchase-mode-button {
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 3px solid var(--ink);
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 2px 2px 0 var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.purchase-mode-button:hover {
+  background: var(--gold);
+}
+
+.purchase-mode-button[aria-pressed="true"] {
+  color: var(--paper);
+  background: var(--ink);
+  box-shadow: 2px 2px 0 var(--ore);
+}
+
+.purchase-mode-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
 }
 
 .upgrade-list {
@@ -788,6 +903,26 @@ input:focus-visible {
 .upgrade-card:nth-child(3n) .upgrade-icon {
   color: var(--ink);
   background: var(--gold);
+}
+
+.upgrade-card.upgrade-card--milestone {
+  --milestone-accent: var(--gold);
+  --milestone-contrast: var(--ink);
+  background: #f5dfb1;
+  box-shadow: 4px 4px 0 var(--milestone-accent), 8px 8px 0 var(--ink);
+}
+
+.upgrade-card.upgrade-card--milestone .upgrade-icon {
+  color: var(--milestone-contrast);
+  background: var(--milestone-accent);
+}
+
+.upgrade-card--milestone .upgrade-level {
+  color: var(--ink);
+}
+
+.upgrade-card--milestone .upgrade-effect {
+  color: var(--ore);
 }
 
 .upgrade-info {
@@ -845,6 +980,141 @@ input:focus-visible {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+}
+
+.mineral-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.mineral-card {
+  --mineral-accent: var(--slate);
+  --mineral-stage: var(--cave);
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  box-shadow: 4px 4px 0 var(--slate);
+}
+
+.mineral-card.is-current {
+  box-shadow: 4px 4px 0 var(--mineral-accent), 8px 8px 0 var(--ink);
+}
+
+.mineral-preview {
+  position: relative;
+  display: grid;
+  min-height: 132px;
+  overflow: hidden;
+  place-items: center;
+  border-bottom: 3px solid var(--ink);
+  background: var(--mineral-stage);
+  box-shadow: inset 0 0 0 6px rgba(243, 231, 197, 0.12);
+}
+
+.mineral-preview::before,
+.mineral-preview::after {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  content: "";
+  background: var(--mineral-accent);
+  box-shadow: 28px 18px 0 var(--mineral-accent), -34px 42px 0 var(--mineral-accent);
+  opacity: 0.64;
+}
+
+.mineral-preview::before {
+  top: 18px;
+  left: 28px;
+}
+
+.mineral-preview::after {
+  right: 34px;
+  bottom: 22px;
+  transform: scale(0.72);
+}
+
+.mineral-preview canvas {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 104px;
+  height: 104px;
+  image-rendering: pixelated;
+  filter: drop-shadow(5px 7px 0 rgba(0, 0, 0, 0.56));
+}
+
+.mineral-card:not(.is-unlocked) .mineral-preview canvas {
+  filter: grayscale(1) brightness(0.2) drop-shadow(5px 7px 0 rgba(0, 0, 0, 0.72));
+  opacity: 0.74;
+}
+
+.mineral-card-body {
+  display: grid;
+  gap: 6px;
+  padding: 13px 14px 15px;
+}
+
+.mineral-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mineral-card-heading h3 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.mineral-stage-number {
+  color: var(--mineral-accent);
+  font-family: var(--font-pixel);
+  font-size: 0.44rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.mineral-description {
+  min-height: 44px;
+  margin: 0;
+  color: var(--slate);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.mineral-status {
+  justify-self: start;
+  padding: 4px 7px;
+  color: var(--paper);
+  background: var(--slate);
+  font-family: var(--font-pixel);
+  font-size: 0.43rem;
+  line-height: 1.5;
+}
+
+.mineral-card.is-unlocked .mineral-status {
+  color: var(--ink);
+  background: var(--mineral-accent);
+}
+
+.mineral-card.is-current .mineral-status {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.mineral-select-button {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.mineral-card.is-current .mineral-select-button:disabled {
+  color: var(--paper);
+  background: var(--ink);
+  opacity: 1;
 }
 
 .achievement-card {
@@ -1251,7 +1521,8 @@ body.reduce-motion *::after {
     grid-template-columns: 1fr;
   }
 
-  .achievement-grid {
+  .achievement-grid,
+  .mineral-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1366,6 +1637,23 @@ body.reduce-motion *::after {
     min-height: 340px;
   }
 
+  .ore-stage-marker {
+    top: 12px;
+    left: 12px;
+    min-width: 92px;
+    padding: 6px 8px;
+  }
+
+  .purchase-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .purchase-mode-buttons {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .upgrade-card {
     grid-template-columns: 38px minmax(0, 1fr);
   }
@@ -1381,6 +1669,7 @@ body.reduce-motion *::after {
   }
 
   .achievement-grid,
+  .mineral-grid,
   .storage-details,
   .save-actions {
     grid-template-columns: 1fr;
@@ -1431,10 +1720,12 @@ body.reduce-motion *::after {
 @media (forced-colors: active) {
   .pixel-panel,
   .pixel-button,
+  .purchase-mode-button,
   .utility-menu-button,
   .dialog-icon-close,
   .mine-stage,
   .upgrade-card,
+  .mineral-card,
   .achievement-card,
   .storage-details > div {
     border-color: CanvasText;

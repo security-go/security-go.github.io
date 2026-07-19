@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const SAVE_VERSION = 1;
+  const SAVE_VERSION = 3;
   const SAVE_KEY = "pixelMine.save";
   const CORRUPT_SAVE_KEY = "pixelMine.corruptSave";
   const TAB_LEASE_KEY = "pixelMine.activeTab";
@@ -20,6 +20,124 @@
   const MAX_VISIBLE_TOASTS = 3;
   const TOAST_DURATION_MS = 3_600;
   const BACKGROUND_MUSIC_VOLUME = 0.22;
+  const ORE_MILESTONE_UPGRADE_ID = "ore_milestone";
+
+  const ORE_DEFINITIONS = Object.freeze([
+    {
+      id: "coal",
+      name: "석탄",
+      englishName: "COAL",
+      description: "빛을 삼키는 검은 탄층. 픽셀 광산의 첫 연료입니다.",
+      unlockCost: 0,
+      palette: {
+        outline: "#080b0e",
+        base: "#15191d",
+        baseAlt: "#252b31",
+        shadow: "#050708",
+        deposit: "#465059",
+        accent: "#7d8991",
+        highlight: "#d6dde0",
+        stage: "#10151a",
+        wall: "#313a43",
+        contrast: "#f3e7c5",
+      },
+    },
+    {
+      id: "bronze",
+      name: "브론즈",
+      englishName: "BRONZE",
+      description: "암반 사이로 붉은 갈색 금속빛이 흐르는 따뜻한 광맥입니다.",
+      unlockCost: 250_000,
+      palette: {
+        outline: "#21150f",
+        base: "#3b2b24",
+        baseAlt: "#604433",
+        shadow: "#211711",
+        deposit: "#9a552e",
+        accent: "#d38148",
+        highlight: "#f3c281",
+        stage: "#231813",
+        wall: "#6b4230",
+        contrast: "#fff1d6",
+      },
+    },
+    {
+      id: "iron",
+      name: "철",
+      englishName: "IRON",
+      description: "차갑고 단단한 은회색 결정이 층층이 박힌 산업의 광맥입니다.",
+      unlockCost: 5_000_000,
+      palette: {
+        outline: "#151b22",
+        base: "#323d47",
+        baseAlt: "#4f5c65",
+        shadow: "#1e2730",
+        deposit: "#83909a",
+        accent: "#c1cbd1",
+        highlight: "#f2f5f4",
+        stage: "#202830",
+        wall: "#52616d",
+        contrast: "#17202a",
+      },
+    },
+    {
+      id: "gold",
+      name: "금",
+      englishName: "GOLD",
+      description: "어두운 암반을 가르는 황금빛 결이 선명하게 반짝이는 광맥입니다.",
+      unlockCost: 30_000_000,
+      palette: {
+        outline: "#21180a",
+        base: "#44371f",
+        baseAlt: "#65502b",
+        shadow: "#2d2415",
+        deposit: "#c78e22",
+        accent: "#f2c64d",
+        highlight: "#fff1a6",
+        stage: "#241c0e",
+        wall: "#6d5729",
+        contrast: "#17202a",
+      },
+    },
+    {
+      id: "ruby",
+      name: "루비",
+      englishName: "RUBY",
+      description: "깊은 붉은 결정이 맥박치듯 빛나는 고열의 보석 광맥입니다.",
+      unlockCost: 400_000_000,
+      palette: {
+        outline: "#210b13",
+        base: "#481627",
+        baseAlt: "#76213a",
+        shadow: "#2d0d18",
+        deposit: "#bd2850",
+        accent: "#f34f72",
+        highlight: "#ffd0d9",
+        stage: "#200b14",
+        wall: "#70233a",
+        contrast: "#f3e7c5",
+      },
+    },
+    {
+      id: "diamond",
+      name: "다이아",
+      englishName: "DIAMOND",
+      description: "청백색 결정면이 별빛처럼 갈라지는 최심부의 희귀 광맥입니다.",
+      unlockCost: 12_500_000_000,
+      palette: {
+        outline: "#071a24",
+        base: "#12394b",
+        baseAlt: "#1f6074",
+        shadow: "#0a2632",
+        deposit: "#38bdd3",
+        accent: "#87eff5",
+        highlight: "#f6ffff",
+        stage: "#071f2a",
+        wall: "#21566b",
+        contrast: "#17202a",
+      },
+    },
+  ]);
 
   const UPGRADE_DEFINITIONS = Object.freeze([
     {
@@ -88,6 +206,15 @@
       costGrowth: 1.72,
       maxLevel: 50,
     },
+    {
+      id: ORE_MILESTONE_UPGRADE_ID,
+      icon: "O+",
+      name: "광맥 개척",
+      description: "마일스톤마다 새 광맥 외형과 광물 도감 항목을 해금합니다.",
+      type: "milestone",
+      costs: Object.freeze(ORE_DEFINITIONS.slice(1).map((ore) => ore.unlockCost)),
+      maxLevel: ORE_DEFINITIONS.length - 1,
+    },
   ]);
 
   const ACHIEVEMENT_DEFINITIONS = Object.freeze([
@@ -139,6 +266,36 @@
       description: "모든 업그레이드를 하나 이상 보유한다.",
       condition: (data) => UPGRADE_DEFINITIONS.every((upgrade) => data.upgrades[upgrade.id] >= 1),
     },
+    {
+      id: "discover_bronze",
+      name: "청동빛 발견",
+      description: "브론즈 광맥을 발견한다.",
+      condition: (data) => data.upgrades[ORE_MILESTONE_UPGRADE_ID] >= 1,
+    },
+    {
+      id: "discover_iron",
+      name: "강철의 토대",
+      description: "철 광맥을 발견한다.",
+      condition: (data) => data.upgrades[ORE_MILESTONE_UPGRADE_ID] >= 2,
+    },
+    {
+      id: "discover_gold",
+      name: "황금의 맥",
+      description: "금 광맥을 발견한다.",
+      condition: (data) => data.upgrades[ORE_MILESTONE_UPGRADE_ID] >= 3,
+    },
+    {
+      id: "discover_ruby",
+      name: "붉은 심장",
+      description: "루비 광맥을 발견한다.",
+      condition: (data) => data.upgrades[ORE_MILESTONE_UPGRADE_ID] >= 4,
+    },
+    {
+      id: "discover_diamond",
+      name: "최심부의 별",
+      description: "다이아 광맥을 발견한다.",
+      condition: (data) => data.upgrades[ORE_MILESTONE_UPGRADE_ID] >= 5,
+    },
   ]);
 
   const MIGRATIONS = Object.freeze({
@@ -161,6 +318,37 @@
         data: next,
       };
     },
+    1: (payload) => {
+      if (!isPlainObject(payload.data)) throw new SaveValidationError("v1 data 객체가 없습니다.");
+      const upgrades = isPlainObject(payload.data.upgrades) ? { ...payload.data.upgrades } : {};
+      if (upgrades[ORE_MILESTONE_UPGRADE_ID] === undefined) upgrades[ORE_MILESTONE_UPGRADE_ID] = 0;
+
+      return {
+        version: 2,
+        meta: isPlainObject(payload.meta) ? payload.meta : { app: "PIXEL_MINE", label: "픽셀 광산" },
+        data: {
+          ...payload.data,
+          upgrades,
+        },
+      };
+    },
+    2: (payload) => {
+      if (!isPlainObject(payload.data)) throw new SaveValidationError("v2 data 객체가 없습니다.");
+      const upgrades = isPlainObject(payload.data.upgrades) ? payload.data.upgrades : {};
+      const rawLevel = upgrades[ORE_MILESTONE_UPGRADE_ID];
+      const oreIndex = Number.isInteger(rawLevel)
+        ? Math.min(ORE_DEFINITIONS.length - 1, Math.max(0, rawLevel))
+        : 0;
+
+      return {
+        version: 3,
+        meta: isPlainObject(payload.meta) ? payload.meta : { app: "PIXEL_MINE", label: "픽셀 광산" },
+        data: {
+          ...payload.data,
+          selectedOreId: ORE_DEFINITIONS[oreIndex].id,
+        },
+      };
+    },
   });
 
   class SaveValidationError extends Error {}
@@ -170,6 +358,7 @@
   const tabId = createRandomId("instance");
   const upgradeElements = new Map();
   const achievementElements = new Map();
+  const mineralElements = new Map();
   const toastEntries = new Map();
   const storageState = {
     available: false,
@@ -193,6 +382,7 @@
   let mutationSaveTimer = null;
   let tabHeartbeatTimer = null;
   let lastRenderAt = 0;
+  let purchaseMode = "one";
 
   document.addEventListener("DOMContentLoaded", initialize);
 
@@ -220,6 +410,8 @@
       "sessionWarning",
       "saveIndicator",
       "manualSaveButton",
+      "mineralCatalogMenuButton",
+      "mineralCatalogMenuBadge",
       "achievementsMenuButton",
       "achievementMenuBadge",
       "saveMenuButton",
@@ -232,10 +424,19 @@
       "totalEarnedValue",
       "totalClicksValue",
       "offlineEarnedValue",
+      "mineSection",
+      "mineStage",
+      "mineShaftEyebrow",
+      "currentOreBadge",
+      "currentOreStageLabel",
+      "currentOreName",
       "mineButton",
+      "mineButtonLabel",
       "mineGainLabel",
       "oreCanvas",
       "upgradeList",
+      "mineralCatalogList",
+      "mineralCatalogCount",
       "achievementList",
       "achievementCount",
       "localStorageStatus",
@@ -249,6 +450,7 @@
       "resetOpenButton",
       "reducedMotionToggle",
       "toastRegion",
+      "mineralCatalogDialog",
       "achievementsDialog",
       "saveManagementDialog",
       "offlineDialog",
@@ -270,6 +472,7 @@
     ];
 
     dom = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
+    dom.purchaseModeButtons = [...document.querySelectorAll("[data-purchase-mode]")];
   }
 
   function configureBackgroundMusic() {
@@ -283,6 +486,9 @@
     dom.confirmStartButton.addEventListener("click", handleStart);
     dom.startImportButton.addEventListener("click", () => openImportDialog("start"));
     dom.mineButton.addEventListener("click", handleMineClick);
+    dom.purchaseModeButtons.forEach((button) => {
+      button.addEventListener("click", () => setPurchaseMode(button.dataset.purchaseMode));
+    });
     dom.manualSaveButton.addEventListener("click", () => {
       const saved = saveGame("수동 저장");
       showToast(saved ? "현재 진행도를 저장했습니다." : "로컬 저장에 실패했습니다.", {
@@ -290,6 +496,10 @@
         key: saved ? "save:manual-success" : "save:manual-error",
       });
       void refreshStorageEstimate();
+    });
+    dom.mineralCatalogMenuButton.addEventListener("click", () => {
+      renderMineralCatalog();
+      openDialog(dom.mineralCatalogDialog);
     });
     dom.achievementsMenuButton.addEventListener("click", () => {
       renderAchievements();
@@ -397,6 +607,7 @@
     applyMotionSetting();
     applyMusicSetting({ attemptPlayback: true, notifyBlocked: true });
     buildUpgradeCards();
+    buildMineralCatalogCards();
     buildAchievementCards();
     evaluateAchievements(true);
     renderAll();
@@ -433,6 +644,7 @@
       totalCurrencyEarned: 0,
       totalClicks: 0,
       upgrades: Object.fromEntries(UPGRADE_DEFINITIONS.map((upgrade) => [upgrade.id, 0])),
+      selectedOreId: ORE_DEFINITIONS[0].id,
       unlockedAchievements: {},
       stats: {
         playTimeMs: 0,
@@ -467,6 +679,7 @@
       totalCurrencyEarned: data.totalCurrencyEarned,
       totalClicks: data.totalClicks,
       upgrades: Object.fromEntries(UPGRADE_DEFINITIONS.map((upgrade) => [upgrade.id, data.upgrades[upgrade.id]])),
+      selectedOreId: data.selectedOreId,
       unlockedAchievements: { ...data.unlockedAchievements },
       stats: {
         playTimeMs: data.stats.playTimeMs,
@@ -565,6 +778,17 @@
       );
     }
 
+    const highestUnlockedOreIndex = upgrades[ORE_MILESTONE_UPGRADE_ID];
+    const fallbackOreId = ORE_DEFINITIONS[highestUnlockedOreIndex].id;
+    const selectedOreId = input.selectedOreId ?? fallbackOreId;
+    if (typeof selectedOreId !== "string") {
+      throw new SaveValidationError("선택 광맥 ID가 문자열이 아닙니다.");
+    }
+    const selectedOreIndex = ORE_DEFINITIONS.findIndex((ore) => ore.id === selectedOreId);
+    if (selectedOreIndex < 0 || selectedOreIndex > highestUnlockedOreIndex) {
+      throw new SaveValidationError("선택 광맥이 존재하지 않거나 아직 발견되지 않았습니다.");
+    }
+
     const achievements = {};
     const knownAchievementIds = new Set(ACHIEVEMENT_DEFINITIONS.map((achievement) => achievement.id));
     for (const [id, unlockedAt] of Object.entries(input.unlockedAchievements)) {
@@ -585,6 +809,7 @@
       totalCurrencyEarned: validatedNumber(input.totalCurrencyEarned, "누적 광석"),
       totalClicks: validatedNumber(input.totalClicks, "총 클릭", MAX_SAFE_VALUE, true),
       upgrades,
+      selectedOreId,
       unlockedAchievements: achievements,
       stats: {
         playTimeMs: validatedNumber(input.stats.playTimeMs, "플레이 시간"),
@@ -896,8 +1121,69 @@
   }
 
   function calculateUpgradeCost(definition, level) {
+    if (Array.isArray(definition.costs)) {
+      const fixedCost = definition.costs[level];
+      return typeof fixedCost === "number" ? fixedCost : MAX_SAFE_VALUE;
+    }
     const raw = definition.baseCost * Math.pow(definition.costGrowth, level);
     return Math.min(MAX_SAFE_VALUE, Math.max(1, Math.floor(raw)));
+  }
+
+  function getUnlockedOreIndex(data = state) {
+    const level = data?.upgrades?.[ORE_MILESTONE_UPGRADE_ID] ?? 0;
+    return Math.min(ORE_DEFINITIONS.length - 1, Math.max(0, Math.floor(level)));
+  }
+
+  function getSelectedOreIndex(data = state) {
+    const unlockedIndex = getUnlockedOreIndex(data);
+    const selectedIndex = ORE_DEFINITIONS.findIndex((ore) => ore.id === data?.selectedOreId);
+    return selectedIndex >= 0 && selectedIndex <= unlockedIndex ? selectedIndex : unlockedIndex;
+  }
+
+  function calculateBulkPurchase(definition, level, currency, mode = purchaseMode) {
+    const remainingLevels = Math.max(0, definition.maxLevel - level);
+    const requestedCount = mode === "max"
+      ? remainingLevels
+      : Math.min(mode === "ten" ? 10 : 1, remainingLevels);
+    let count = 0;
+    let totalCost = 0;
+
+    while (count < requestedCount) {
+      const nextCost = calculateUpgradeCost(definition, level + count);
+      if (nextCost > currency - totalCost) break;
+      totalCost += nextCost;
+      count += 1;
+    }
+
+    return {
+      count,
+      totalCost,
+      requestedCount,
+      nextCost: remainingLevels > 0 ? calculateUpgradeCost(definition, level) : 0,
+    };
+  }
+
+  function setPurchaseMode(mode) {
+    if (!["one", "ten", "max"].includes(mode)) return;
+    purchaseMode = mode;
+    dom.purchaseModeButtons.forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.purchaseMode === mode));
+    });
+    renderUpgrades();
+  }
+
+  function getUpgradeEffectText(definition, level) {
+    if (definition.type === "click") {
+      return `레벨당 클릭 +${formatNumber(definition.effectPerLevel)}`;
+    }
+    if (definition.type === "auto") {
+      return `레벨당 초당 +${formatNumber(definition.effectPerLevel)}`;
+    }
+
+    const nextOre = ORE_DEFINITIONS[level + 1];
+    return nextOre
+      ? `다음 마일스톤: ${nextOre.name} 광맥 · 도감 등록`
+      : "6종 광물 발견 완료 · 외형은 도감에서 선택";
   }
 
   function handleMineClick() {
@@ -924,19 +1210,27 @@
     advanceDataTo(state, Date.now(), false);
     const level = state.upgrades[id];
     if (level >= definition.maxLevel) return;
-
-    const cost = calculateUpgradeCost(definition, level);
-    if (state.currency < cost) {
+    const purchase = calculateBulkPurchase(definition, level, state.currency);
+    if (purchase.count === 0) {
       showToast("광석이 부족합니다.", { error: true, key: "upgrade:insufficient-ore" });
       return;
     }
 
-    state.currency = Math.max(0, state.currency - cost);
-    state.upgrades[id] += 1;
+    state.currency = Math.max(0, state.currency - purchase.totalCost);
+    state.upgrades[id] += purchase.count;
+    const finalOre = definition.type === "milestone" ? ORE_DEFINITIONS[state.upgrades[id]] : null;
+    if (finalOre) state.selectedOreId = finalOre.id;
     evaluateAchievements(true);
     renderAll();
     scheduleMutationSave();
-    showToast(`${definition.name} 레벨 ${state.upgrades[id]} 달성`, {
+    const message = finalOre
+      ? purchase.count === 1
+        ? `${finalOre.name} 광맥 해금 · 도감 등록`
+        : `${finalOre.name} 광맥까지 ${purchase.count}단계 해금 · 도감 등록`
+      : purchase.count === 1
+        ? `${definition.name} 레벨 ${state.upgrades[id]} 달성`
+        : `${definition.name} ${purchase.count}개 구매 · 레벨 ${state.upgrades[id]} 달성`;
+    showToast(message, {
       key: `upgrade:${id}`,
       countMode: "purchase",
     });
@@ -970,6 +1264,8 @@
     for (const definition of UPGRADE_DEFINITIONS) {
       const card = document.createElement("article");
       card.className = "upgrade-card";
+      card.dataset.upgradeId = definition.id;
+      if (definition.type === "milestone") card.classList.add("upgrade-card--milestone");
 
       const icon = document.createElement("span");
       icon.className = "upgrade-icon";
@@ -990,9 +1286,7 @@
       description.textContent = definition.description;
       const effect = document.createElement("p");
       effect.className = "upgrade-effect";
-      effect.textContent = definition.type === "click"
-        ? `레벨당 클릭 +${formatNumber(definition.effectPerLevel)}`
-        : `레벨당 초당 +${formatNumber(definition.effectPerLevel)}`;
+      effect.textContent = getUpgradeEffectText(definition, 0);
       nameRow.append(name, level);
       info.append(nameRow, description, effect);
 
@@ -1008,8 +1302,54 @@
 
       card.append(icon, info, buyButton);
       dom.upgradeList.append(card);
-      upgradeElements.set(definition.id, { card, level, buyButton, buyLabel, cost });
+      upgradeElements.set(definition.id, { card, icon, level, effect, buyButton, buyLabel, cost });
     }
+  }
+
+  function buildMineralCatalogCards() {
+    dom.mineralCatalogList.replaceChildren();
+    mineralElements.clear();
+
+    ORE_DEFINITIONS.forEach((definition, index) => {
+      const card = document.createElement("article");
+      card.className = "mineral-card";
+      card.dataset.mineralId = definition.id;
+      card.style.setProperty("--mineral-accent", definition.palette.accent);
+      card.style.setProperty("--mineral-stage", definition.palette.stage);
+
+      const preview = document.createElement("div");
+      preview.className = "mineral-preview";
+      preview.setAttribute("aria-hidden", "true");
+      const canvas = document.createElement("canvas");
+      canvas.width = 24;
+      canvas.height = 24;
+      drawOreSprite(canvas, definition);
+      preview.append(canvas);
+
+      const body = document.createElement("div");
+      body.className = "mineral-card-body";
+      const heading = document.createElement("div");
+      heading.className = "mineral-card-heading";
+      const name = document.createElement("h3");
+      name.textContent = definition.name;
+      const stage = document.createElement("span");
+      stage.className = "mineral-stage-number";
+      stage.textContent = `STAGE ${String(index + 1).padStart(2, "0")}`;
+      heading.append(name, stage);
+      const description = document.createElement("p");
+      description.className = "mineral-description";
+      const status = document.createElement("span");
+      status.className = "mineral-status";
+      const selectButton = document.createElement("button");
+      selectButton.className = "pixel-button pixel-button--small mineral-select-button";
+      selectButton.type = "button";
+      selectButton.addEventListener("click", () => selectOre(definition.id));
+      body.append(heading, description, status, selectButton);
+
+      card.append(preview, body);
+      dom.mineralCatalogList.append(card);
+      mineralElements.set(definition.id, { card, description, status, selectButton });
+    });
   }
 
   function buildAchievementCards() {
@@ -1035,10 +1375,87 @@
     }
   }
 
+  function renderOreProgression() {
+    if (!state) return;
+    const oreIndex = getSelectedOreIndex();
+    const ore = ORE_DEFINITIONS[oreIndex];
+    const stageNumber = String(oreIndex + 1).padStart(2, "0");
+
+    dom.mineSection.dataset.ore = ore.id;
+    dom.mineSection.style.setProperty("--mine-accent", ore.palette.accent);
+    dom.mineSection.style.setProperty("--mine-secondary", ore.palette.baseAlt);
+    dom.mineSection.style.setProperty("--mine-stage", ore.palette.stage);
+    dom.mineSection.style.setProperty("--mine-wall", ore.palette.wall);
+    dom.mineSection.style.setProperty("--mine-contrast", ore.palette.contrast);
+    dom.mineShaftEyebrow.textContent = `MINE SHAFT ${stageNumber}`;
+    dom.currentOreBadge.textContent = `${ore.name} · ${oreIndex + 1}/${ORE_DEFINITIONS.length}`;
+    dom.currentOreStageLabel.textContent = `STAGE ${stageNumber}`;
+    dom.currentOreName.textContent = ore.name;
+    dom.mineButtonLabel.textContent = `${ore.name} 채굴`;
+    dom.mineButton.setAttribute("aria-label", `${ore.name} 광맥을 채굴해 광석 획득`);
+    dom.mineStage.setAttribute("aria-label", `현재 ${ore.name} 광맥, 전체 ${ORE_DEFINITIONS.length}단계 중 ${oreIndex + 1}단계`);
+    drawOreSprite(dom.oreCanvas, ore);
+  }
+
+  function selectOre(id) {
+    if (!sessionStarted || sessionBlocked || !state) return;
+    const oreIndex = ORE_DEFINITIONS.findIndex((ore) => ore.id === id);
+    if (oreIndex < 0 || oreIndex > getUnlockedOreIndex()) {
+      showToast("아직 발견하지 않은 광맥입니다.", { error: true, key: "ore-select:locked" });
+      return;
+    }
+    if (state.selectedOreId === id) return;
+
+    state.selectedOreId = id;
+    renderOreProgression();
+    renderMineralCatalog();
+    scheduleMutationSave();
+    showToast(`${ORE_DEFINITIONS[oreIndex].name} 광맥 외형을 적용했습니다.`, { key: `ore-select:${id}` });
+  }
+
+  function renderMineralCatalog() {
+    if (!state) return;
+    const unlockedIndex = getUnlockedOreIndex();
+    const selectedIndex = getSelectedOreIndex();
+
+    ORE_DEFINITIONS.forEach((definition, index) => {
+      const elements = mineralElements.get(definition.id);
+      if (!elements) return;
+      const unlocked = index <= unlockedIndex;
+      const current = index === selectedIndex;
+      elements.card.classList.toggle("is-unlocked", unlocked);
+      elements.card.classList.toggle("is-current", current);
+      elements.description.textContent = unlocked
+        ? definition.description
+        : `광맥 개척 STAGE ${String(index + 1).padStart(2, "0")}에서 발견 · ${formatNumber(definition.unlockCost)} 광석`;
+      elements.status.textContent = current ? "CURRENT" : unlocked ? "DISCOVERED" : "LOCKED";
+      elements.selectButton.disabled = !unlocked || current || sessionBlocked;
+      elements.selectButton.textContent = current ? "적용 중" : unlocked ? "이 광맥 선택" : "미발견";
+      elements.selectButton.setAttribute(
+        "aria-label",
+        current ? `${definition.name} 광맥 적용 중` : unlocked ? `${definition.name} 광맥 외형 선택` : `${definition.name} 광맥 미발견`,
+      );
+      elements.card.setAttribute(
+        "aria-label",
+        `${definition.name}, ${current ? "현재 광맥" : unlocked ? "발견 완료" : "미발견"}`,
+      );
+    });
+
+    const discovered = unlockedIndex + 1;
+    dom.mineralCatalogCount.textContent = `${discovered} / ${ORE_DEFINITIONS.length}`;
+    dom.mineralCatalogMenuBadge.textContent = `${discovered}/${ORE_DEFINITIONS.length}`;
+    dom.mineralCatalogMenuButton.setAttribute(
+      "aria-label",
+      `광물 도감 열기, ${discovered}/${ORE_DEFINITIONS.length} 발견`,
+    );
+  }
+
   function renderAll() {
     if (!state) return;
     renderGameValues();
+    renderOreProgression();
     renderUpgrades();
+    renderMineralCatalog();
     renderAchievements();
     renderSaveDetails();
   }
@@ -1063,14 +1480,46 @@
       if (!elements) continue;
       const level = state.upgrades[definition.id];
       const isMax = level >= definition.maxLevel;
-      const cost = calculateUpgradeCost(definition, level);
-      elements.level.textContent = `LV.${level}`;
-      elements.buyLabel.textContent = isMax ? "최대 레벨" : "구매";
-      elements.cost.textContent = isMax ? "MAX" : `${formatNumber(cost)} 광석`;
-      elements.buyButton.disabled = isMax || state.currency < cost || sessionBlocked;
+      const isMilestone = definition.type === "milestone";
+      const nextOre = isMilestone ? ORE_DEFINITIONS[level + 1] : null;
+      const paletteOre = nextOre ?? ORE_DEFINITIONS[getUnlockedOreIndex()];
+      const purchase = calculateBulkPurchase(definition, level, state.currency);
+      const purchaseUnit = isMilestone ? "단계" : "개";
+
+      elements.level.textContent = isMilestone
+        ? `STAGE ${level + 1}/${ORE_DEFINITIONS.length}`
+        : `LV.${level}`;
+      elements.effect.textContent = getUpgradeEffectText(definition, level);
+      elements.buyLabel.textContent = isMax
+        ? (isMilestone ? "개척 완료" : "최대 레벨")
+        : purchase.count === 0
+          ? "구매 불가"
+          : purchaseMode === "one"
+            ? (isMilestone ? "다음 광맥" : "구매")
+            : `${purchase.count}${purchaseUnit} ${isMilestone ? "개척" : "구매"}`;
+      elements.cost.textContent = isMax
+        ? "MAX"
+        : purchase.count > 0
+          ? `${formatNumber(purchase.totalCost)} 광석`
+          : `최소 ${formatNumber(purchase.nextCost)} 광석`;
+      elements.cost.title = isMax
+        ? "최대 레벨"
+        : formatExactNumber(purchase.count > 0 ? purchase.totalCost : purchase.nextCost);
+      elements.buyButton.disabled = isMax || purchase.count === 0 || sessionBlocked;
+      elements.card.dataset.purchaseCount = String(purchase.count);
+      if (isMilestone) {
+        elements.card.style.setProperty("--milestone-accent", paletteOre.palette.accent);
+        elements.card.style.setProperty("--milestone-contrast", paletteOre.palette.contrast);
+      }
       elements.buyButton.setAttribute(
         "aria-label",
-        isMax ? `${definition.name} 최대 레벨` : `${definition.name} 구매, 비용 ${formatNumber(cost)} 광석`,
+        isMax
+          ? `${definition.name} 완료, 광물 ${ORE_DEFINITIONS.length}종 발견`
+          : purchase.count === 0
+            ? `${definition.name} 구매 불가, 최소 비용 ${formatNumber(purchase.nextCost)} 광석`
+            : isMilestone
+              ? `${nextOre.name}부터 광맥 ${purchase.count}단계 개척, 총비용 ${formatNumber(purchase.totalCost)} 광석`
+              : `${definition.name} ${purchase.count}개 구매, 총비용 ${formatNumber(purchase.totalCost)} 광석`,
       );
     }
   }
@@ -1575,12 +2024,12 @@
     window.setTimeout(() => floating.remove(), 750);
   }
 
-  function drawOreSprite() {
-    const canvas = dom.oreCanvas;
+  function drawOreSprite(canvas = dom.oreCanvas, definition = ORE_DEFINITIONS[getSelectedOreIndex()]) {
     const context = canvas.getContext("2d");
     if (!context) return;
     context.imageSmoothingEnabled = false;
     context.clearRect(0, 0, canvas.width, canvas.height);
+    const palette = definition.palette;
 
     const rows = [
       [9, 14], [7, 16], [5, 18], [4, 19], [3, 20], [2, 21], [2, 21], [1, 22], [1, 22], [1, 22],
@@ -1591,27 +2040,61 @@
       const y = rowIndex + 2;
       for (let x = start; x <= end; x += 1) {
         const edge = x === start || x === end || rowIndex === 0 || rowIndex === rows.length - 1;
-        context.fillStyle = edge ? "#17202a" : ((x + y) % 5 === 0 ? "#668b5b" : "#3d5961");
+        context.fillStyle = edge ? palette.outline : ((x * 3 + y) % 7 < 2 ? palette.baseAlt : palette.base);
         context.fillRect(x, y, 1, 1);
       }
     });
 
-    context.fillStyle = "#263849";
-    [[5, 7, 4, 3], [14, 5, 4, 4], [4, 14, 5, 3], [15, 15, 4, 3], [10, 18, 3, 2]].forEach(([x, y, w, h]) => {
-      context.fillRect(x, y, w, h);
-    });
-    context.fillStyle = "#d6b45a";
-    [[9, 6, 2, 4], [11, 9, 3, 2], [8, 12, 3, 3], [13, 14, 2, 4], [6, 17, 2, 2]].forEach(([x, y, w, h]) => {
-      context.fillRect(x, y, w, h);
-    });
-    context.fillStyle = "#dc6b4a";
-    [[10, 5, 2, 2], [12, 10, 2, 3], [9, 14, 2, 2], [14, 17, 2, 2]].forEach(([x, y, w, h]) => {
-      context.fillRect(x, y, w, h);
-    });
-    context.fillStyle = "#f3e7c5";
-    context.fillRect(10, 6, 1, 1);
-    context.fillRect(13, 10, 1, 1);
-    context.fillRect(9, 14, 1, 1);
+    const fillRects = (color, rectangles) => {
+      context.fillStyle = color;
+      rectangles.forEach(([x, y, width, height]) => context.fillRect(x, y, width, height));
+    };
+    const drawSparkle = (x, y, color) => {
+      context.fillStyle = color;
+      context.fillRect(x, y - 2, 1, 5);
+      context.fillRect(x - 2, y, 5, 1);
+    };
+
+    fillRects(palette.shadow, [[5, 7, 4, 3], [14, 5, 4, 4], [4, 14, 5, 3], [15, 15, 4, 3], [10, 19, 3, 2]]);
+
+    switch (definition.id) {
+      case "coal":
+        fillRects(palette.deposit, [[8, 6, 3, 2], [12, 9, 2, 3], [7, 13, 3, 2], [14, 15, 3, 2], [9, 18, 2, 2]]);
+        fillRects(palette.accent, [[9, 6, 1, 1], [13, 9, 1, 1], [8, 13, 1, 1], [15, 15, 1, 1]]);
+        fillRects(palette.highlight, [[10, 6, 1, 1], [16, 15, 1, 1]]);
+        break;
+      case "bronze":
+        fillRects(palette.deposit, [[9, 5, 2, 4], [10, 8, 4, 2], [12, 10, 2, 4], [8, 13, 5, 2], [7, 15, 2, 3], [14, 16, 3, 2]]);
+        fillRects(palette.accent, [[10, 5, 1, 3], [11, 8, 3, 1], [13, 11, 1, 3], [9, 13, 3, 1], [15, 16, 2, 1]]);
+        fillRects(palette.highlight, [[10, 5, 1, 1], [13, 9, 1, 1], [16, 16, 1, 1]]);
+        break;
+      case "iron":
+        fillRects(palette.deposit, [[7, 6, 4, 3], [13, 5, 4, 4], [10, 10, 5, 3], [6, 14, 4, 3], [14, 15, 4, 3], [9, 18, 4, 2]]);
+        fillRects(palette.accent, [[8, 6, 3, 1], [14, 5, 3, 2], [11, 10, 4, 1], [7, 14, 3, 1], [15, 15, 3, 1]]);
+        fillRects(palette.highlight, [[9, 6, 1, 1], [15, 5, 1, 1], [13, 10, 1, 1], [16, 15, 1, 1]]);
+        break;
+      case "gold":
+        fillRects(palette.deposit, [[9, 5, 2, 4], [10, 8, 4, 2], [8, 10, 3, 3], [10, 12, 5, 2], [13, 14, 2, 4], [6, 17, 3, 2]]);
+        fillRects(palette.accent, [[10, 5, 1, 3], [11, 8, 3, 1], [9, 10, 2, 2], [11, 12, 4, 1], [14, 15, 1, 3], [7, 17, 2, 1]]);
+        fillRects(palette.highlight, [[10, 5, 1, 1], [13, 8, 1, 1], [10, 10, 1, 1], [14, 15, 1, 1]]);
+        drawSparkle(21, 5, palette.highlight);
+        break;
+      case "ruby":
+        fillRects(palette.deposit, [[9, 5, 4, 2], [8, 7, 6, 4], [10, 11, 4, 3], [6, 14, 4, 3], [14, 14, 4, 4], [9, 18, 4, 2]]);
+        fillRects(palette.accent, [[10, 5, 2, 1], [9, 7, 4, 3], [11, 11, 2, 2], [7, 14, 2, 2], [15, 14, 2, 3], [10, 18, 2, 1]]);
+        fillRects(palette.highlight, [[10, 6, 1, 1], [10, 7, 1, 2], [12, 11, 1, 1], [16, 14, 1, 1]]);
+        drawSparkle(3, 8, palette.highlight);
+        break;
+      case "diamond":
+        fillRects(palette.deposit, [[9, 4, 4, 2], [7, 6, 8, 3], [8, 9, 6, 4], [10, 13, 4, 3], [5, 15, 4, 3], [15, 15, 4, 3], [9, 18, 5, 2]]);
+        fillRects(palette.accent, [[10, 4, 2, 1], [8, 6, 6, 2], [9, 9, 4, 3], [11, 13, 2, 2], [6, 15, 2, 2], [16, 15, 2, 2], [10, 18, 3, 1]]);
+        fillRects(palette.highlight, [[10, 5, 1, 1], [9, 6, 2, 1], [10, 9, 1, 2], [12, 13, 1, 1], [17, 15, 1, 1]]);
+        drawSparkle(20, 4, palette.highlight);
+        drawSparkle(3, 12, palette.accent);
+        break;
+      default:
+        break;
+    }
   }
 
   function openDialog(dialog) {
