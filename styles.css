@@ -1002,6 +1002,10 @@ input:focus-visible {
 }
 
 .toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 13px 15px;
   border: 4px solid var(--ink);
   color: var(--ink);
@@ -1011,9 +1015,34 @@ input:focus-visible {
   animation: toast-in 180ms steps(3);
 }
 
+.toast-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast-count {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  color: var(--paper);
+  background: var(--ink);
+  font-family: var(--font-pixel);
+  font-size: 0.48rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.toast-count[hidden] {
+  display: none;
+}
+
 .toast.is-error {
   color: var(--paper);
   background: var(--danger);
+}
+
+.toast.is-error .toast-count {
+  color: var(--danger);
+  background: var(--paper);
 }
 
 @keyframes toast-in {

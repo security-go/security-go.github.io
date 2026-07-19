@@ -17,6 +17,8 @@
   const MIN_OFFLINE_REPORT_MS = 5_000;
   const MAX_SAFE_VALUE = 9_000_000_000_000_000;
   const MAX_SAVE_CODE_LENGTH = 200_000;
+  const MAX_VISIBLE_TOASTS = 3;
+  const TOAST_DURATION_MS = 3_600;
 
   const UPGRADE_DEFINITIONS = Object.freeze([
     {
@@ -167,6 +169,7 @@
   const tabId = createRandomId("instance");
   const upgradeElements = new Map();
   const achievementElements = new Map();
+  const toastEntries = new Map();
   const storageState = {
     available: false,
     readError: null,
@@ -271,7 +274,10 @@
     dom.mineButton.addEventListener("click", handleMineClick);
     dom.manualSaveButton.addEventListener("click", () => {
       const saved = saveGame("수동 저장");
-      showToast(saved ? "현재 진행도를 저장했습니다." : "로컬 저장에 실패했습니다.", !saved);
+      showToast(saved ? "현재 진행도를 저장했습니다." : "로컬 저장에 실패했습니다.", {
+        error: !saved,
+        key: saved ? "save:manual-success" : "save:manual-error",
+      });
       void refreshStorageEstimate();
     });
     dom.achievementsMenuButton.addEventListener("click", () => {
@@ -400,7 +406,7 @@
     void refreshStorageEstimate();
     void persistenceRequest;
 
-    if (loadResult.warning) showToast(loadResult.warning, loadResult.isError);
+    if (loadResult.warning) showToast(loadResult.warning, { error: loadResult.isError });
     if (shouldShowOfflineReward(offlineResult)) showOfflineReward(offlineResult);
 
     dom.confirmStartButton.disabled = false;
@@ -900,7 +906,7 @@
 
     const cost = calculateUpgradeCost(definition, level);
     if (state.currency < cost) {
-      showToast("광석이 부족합니다.", true);
+      showToast("광석이 부족합니다.", { error: true, key: "upgrade:insufficient-ore" });
       return;
     }
 
@@ -909,7 +915,10 @@
     evaluateAchievements(true);
     renderAll();
     scheduleMutationSave();
-    showToast(`${definition.name} 레벨 ${state.upgrades[id]} 달성`);
+    showToast(`${definition.name} 레벨 ${state.upgrades[id]} 달성`, {
+      key: `upgrade:${id}`,
+      countMode: "purchase",
+    });
   }
 
   function evaluateAchievements(announce) {
@@ -923,7 +932,7 @@
 
       state.unlockedAchievements[achievement.id] = now;
       unlocked.push(achievement);
-      if (announce) showToast(`업적 해금: ${achievement.name}`);
+      if (announce) showToast(`업적 해금: ${achievement.name}`, { key: `achievement:${achievement.id}` });
     }
 
     if (unlocked.length > 0) {
@@ -1125,7 +1134,7 @@
     if (storageState.persistence === "granted") return true;
     if (!navigator.storage || typeof navigator.storage.persist !== "function") {
       setPersistenceStatus("unsupported", "미지원 · 삭제 가능");
-      if (!silent) showToast("이 브라우저는 영구 저장소 요청을 지원하지 않습니다.", true);
+      if (!silent) showToast("이 브라우저는 영구 저장소 요청을 지원하지 않습니다.", { error: true });
       return false;
     }
 
@@ -1134,7 +1143,7 @@
       request = navigator.storage.persist();
     } catch {
       setPersistenceStatus("denied", "요청 실패 · 삭제 가능");
-      if (!silent) showToast("저장 보호 요청을 시작하지 못했습니다.", true);
+      if (!silent) showToast("저장 보호 요청을 시작하지 못했습니다.", { error: true });
       return false;
     }
 
@@ -1145,12 +1154,14 @@
         granted ? "승인됨 · 사용자 삭제 전까지 보호" : "거절됨 · 삭제 가능",
       );
       if (!silent) {
-        showToast(granted ? "브라우저가 저장 보호를 승인했습니다." : "저장 보호가 승인되지 않았습니다. 세이브 코드를 백업해주세요.", !granted);
+        showToast(granted ? "브라우저가 저장 보호를 승인했습니다." : "저장 보호가 승인되지 않았습니다. 세이브 코드를 백업해주세요.", {
+          error: !granted,
+        });
       }
       return granted;
     } catch {
       setPersistenceStatus("denied", "요청 실패 · 삭제 가능");
-      if (!silent) showToast("저장 보호 요청 중 오류가 발생했습니다.", true);
+      if (!silent) showToast("저장 보호 요청 중 오류가 발생했습니다.", { error: true });
       return false;
     }
   }
@@ -1300,7 +1311,9 @@
         closeDialog(dom.importDialog);
         setStartDialogStatus("세이브 검증이 완료되었습니다. 게임 시작을 누르면 불러온 진행도로 시작합니다.", false);
         dom.confirmStartButton.textContent = "불러온 세이브로 게임 시작";
-        showToast("세이브 코드를 확인했습니다. 게임 시작 전까지 로컬 저장은 변경하지 않습니다.");
+        showToast("세이브 코드를 확인했습니다. 게임 시작 전까지 로컬 저장은 변경하지 않습니다.", {
+          key: "save:staged-import",
+        });
         return;
       }
 
@@ -1312,7 +1325,10 @@
       renderAll();
       const saved = saveGame("불러오기 완료", false);
       closeDialog(dom.importDialog);
-      showToast(saved ? "세이브 코드를 불러오고 저장했습니다." : "세이브를 메모리로 불러왔지만 로컬 저장에는 실패했습니다.", !saved);
+      showToast(saved ? "세이브 코드를 불러오고 저장했습니다." : "세이브를 메모리로 불러왔지만 로컬 저장에는 실패했습니다.", {
+        error: !saved,
+        key: saved ? "save:import-success" : "save:import-error",
+      });
       if (shouldShowOfflineReward(offlineResult)) showOfflineReward(offlineResult);
       void refreshStorageEstimate();
     } catch (error) {
@@ -1346,7 +1362,10 @@
     const successful = saveRemoved && recoveryRemoved && (saved || !storageState.available);
     showToast(
       successful ? "게임을 초기화하고 새 광산을 만들었습니다." : "메모리 게임은 초기화했지만 로컬 데이터 처리 중 오류가 있었습니다.",
-      !successful,
+      {
+        error: !successful,
+        key: successful ? "save:reset-success" : "save:reset-error",
+      },
     );
     void refreshStorageEstimate();
   }
@@ -1496,12 +1515,82 @@
     dom.startDialogStatus.className = `dialog-status start-dialog-status ${error ? "is-error" : "is-success"}`;
   }
 
-  function showToast(message, error = false) {
+  function showToast(message, options = {}) {
+    const error = options.error === true;
+    const keyPart = typeof options.key === "string" && options.key ? options.key : message;
+    const key = `${error ? "error" : "info"}:${keyPart}`;
+    const countMode = options.countMode === "purchase" ? "purchase" : "repeat";
+    const existing = toastEntries.get(key);
+
+    if (existing) {
+      window.clearTimeout(existing.timerId);
+      existing.count += 1;
+      existing.message = message;
+      existing.countMode = countMode;
+      renderToastEntry(existing);
+      dom.toastRegion.append(existing.element);
+      toastEntries.delete(key);
+      toastEntries.set(key, existing);
+      scheduleToastRemoval(existing);
+      return existing.element;
+    }
+
+    if (toastEntries.size >= MAX_VISIBLE_TOASTS) {
+      const oldest = toastEntries.values().next().value;
+      if (oldest) removeToastEntry(oldest);
+    }
+
     const toast = document.createElement("div");
     toast.className = `toast${error ? " is-error" : ""}`;
-    toast.textContent = message;
+    toast.dataset.toastKey = keyPart;
+    toast.setAttribute("aria-atomic", "true");
+
+    const messageElement = document.createElement("span");
+    messageElement.className = "toast-message";
+    const countElement = document.createElement("span");
+    countElement.className = "toast-count";
+    countElement.hidden = true;
+    toast.append(messageElement, countElement);
+
+    const entry = {
+      key,
+      element: toast,
+      messageElement,
+      countElement,
+      message,
+      count: 1,
+      countMode,
+      timerId: null,
+    };
+
+    renderToastEntry(entry);
     dom.toastRegion.append(toast);
-    window.setTimeout(() => toast.remove(), 3_600);
+    toastEntries.set(key, entry);
+    scheduleToastRemoval(entry);
+    return toast;
+  }
+
+  function renderToastEntry(entry) {
+    entry.messageElement.textContent = entry.message;
+    if (entry.count <= 1) {
+      entry.countElement.hidden = true;
+      entry.countElement.textContent = "";
+      return;
+    }
+
+    entry.countElement.hidden = false;
+    entry.countElement.textContent = entry.countMode === "purchase" ? `${entry.count}회 구매` : `×${entry.count}`;
+  }
+
+  function scheduleToastRemoval(entry) {
+    entry.timerId = window.setTimeout(() => removeToastEntry(entry), TOAST_DURATION_MS);
+  }
+
+  function removeToastEntry(entry) {
+    if (toastEntries.get(entry.key) !== entry) return;
+    window.clearTimeout(entry.timerId);
+    toastEntries.delete(entry.key);
+    entry.element.remove();
   }
 
   function setSessionWarning(message) {

@@ -15,6 +15,7 @@ const START_NOTICE_MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-notice-mobile
 const MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-mobile.png";
 const ACHIEVEMENTS_SCREENSHOT_PATH = "/tmp/pixel-mine-achievements.png";
 const SAVE_MENU_SCREENSHOT_PATH = "/tmp/pixel-mine-save-menu.png";
+const TOAST_SCREENSHOT_PATH = "/tmp/pixel-mine-toast-mobile.png";
 const DEBUG_BASE = `http://${DEBUG_HOST}:${DEBUG_PORT}`;
 
 const passed = [];
@@ -371,6 +372,8 @@ async function run() {
       return {
         messages: [...region.querySelectorAll('.toast')].map((toast) => toast.textContent),
         ariaLive: region.getAttribute('aria-live'),
+        ariaAtomic: region.getAttribute('aria-atomic'),
+        ariaRelevant: region.getAttribute('aria-relevant'),
         position: style.position,
         top: style.top,
         right: style.right,
@@ -380,6 +383,8 @@ async function run() {
     assert(
       upgradeToast.messages.some((message) => message.includes("낡은 곡괭이 레벨 1 달성")) &&
         upgradeToast.ariaLive === "polite" &&
+        upgradeToast.ariaAtomic === "false" &&
+        upgradeToast.ariaRelevant === "additions text" &&
         upgradeToast.position === "fixed" &&
         upgradeToast.top === "18px" &&
         upgradeToast.right === "18px" &&
@@ -740,6 +745,51 @@ async function run() {
     }))()`);
     assert(startedFromImport.shown === "6" && startedFromImport.saved === 6, `시작 전 세이브를 게임 시작 시 적용하지 못했습니다: ${JSON.stringify(startedFromImport)}`);
     pass("다중 탭 확인을 통과한 게임 시작 시 대기 중인 세이브를 적용하고 저장한다");
+
+    await waitFor(secondPage, "document.querySelectorAll('#toastRegion .toast').length === 0", 5_000);
+    await secondPage.evaluate(`(() => {
+      const mine = document.getElementById('mineButton');
+      for (let index = 0; index < 100; index += 1) mine.click();
+      const buyButtons = document.querySelectorAll('.upgrade-buy');
+      for (let index = 0; index < 4; index += 1) buyButtons[0].click();
+      for (let index = 0; index < 4; index += 1) {
+        buyButtons[buyButtons.length - 1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      }
+      return true;
+    })()`);
+    const mergedToasts = await secondPage.evaluate(`(() => ({
+      toasts: [...document.querySelectorAll('#toastRegion .toast')].map((toast) => ({
+        key: toast.dataset.toastKey,
+        message: toast.querySelector('.toast-message')?.textContent,
+        count: toast.querySelector('.toast-count')?.textContent,
+        error: toast.classList.contains('is-error'),
+        atomic: toast.getAttribute('aria-atomic')
+      }))
+    }))()`);
+    const upgradeMerged = mergedToasts.toasts.find((toast) => toast.key === "upgrade:worn_pickaxe");
+    const insufficientMerged = mergedToasts.toasts.find((toast) => toast.key === "upgrade:insufficient-ore");
+    assert(
+      mergedToasts.toasts.length === 3 &&
+        new Set(mergedToasts.toasts.map((toast) => toast.key)).size === 3 &&
+        !mergedToasts.toasts.some((toast) => toast.key === "achievement:ore_100"),
+      `toast 최대 개수 또는 오래된 알림 제거가 올바르지 않습니다: ${JSON.stringify(mergedToasts)}`,
+    );
+    assert(
+      upgradeMerged?.message.includes("낡은 곡괭이 레벨 5 달성") &&
+        upgradeMerged.count === "4회 구매" &&
+        upgradeMerged.atomic === "true" &&
+        insufficientMerged?.message === "광석이 부족합니다." &&
+        insufficientMerged.count === "×4" &&
+        insufficientMerged.error,
+      `동일 toast 병합 결과가 올바르지 않습니다: ${JSON.stringify(mergedToasts)}`,
+    );
+    await delay(220);
+    const toastScreenshot = await secondPage.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(TOAST_SCREENSHOT_PATH, Buffer.from(toastScreenshot.data, "base64"));
+    pass("동일 업그레이드와 오류 알림을 의미 기반으로 합치고 최대 3개만 유지한다");
+
+    await waitFor(secondPage, "document.querySelectorAll('#toastRegion .toast').length === 0", 5_000);
+    pass("병합 시 재설정된 3.6초 타이머가 toast와 관리 상태를 함께 제거한다");
 
     await navigate(secondPage, BASE_URL);
     await waitFor(secondPage, "document.getElementById('protocolStatus')?.classList.contains('is-good') && !document.getElementById('startButton').disabled", 8_000);
