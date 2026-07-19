@@ -952,6 +952,12 @@ input:focus-visible {
   gap: 12px;
 }
 
+.settings-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
 .toggle-row,
 .confirm-row {
   display: flex;
@@ -965,9 +971,17 @@ input:focus-visible {
   cursor: pointer;
 }
 
+.settings-list .toggle-row {
+  margin-top: 0;
+}
+
 .toggle-row small {
   display: block;
   color: var(--slate);
+}
+
+.toggle-row small.is-error {
+  color: var(--danger);
 }
 
 .toggle-row input,

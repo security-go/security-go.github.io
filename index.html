@@ -17,6 +17,14 @@
     <div class="noscript-message">PIXEL MINE을 실행하려면 JavaScript를 활성화해주세요.</div>
   </noscript>
 
+  <audio
+    id="backgroundMusic"
+    src="assets/Below_the_Bedrock.mp3"
+    preload="metadata"
+    loop
+    aria-hidden="true"
+  ></audio>
+
   <div id="startOverlay" class="start-overlay" role="dialog" aria-modal="true" aria-labelledby="startTitle">
     <section class="start-hero">
       <img
@@ -288,13 +296,23 @@
         <button id="resetOpenButton" class="pixel-button pixel-button--danger" type="button">게임 초기화</button>
       </div>
 
-      <label class="toggle-row" for="reducedMotionToggle">
-        <span>
-          <strong>모션 감소</strong>
-          <small>클릭 효과와 화면 움직임을 줄입니다.</small>
-        </span>
-        <input id="reducedMotionToggle" type="checkbox">
-      </label>
+      <div class="settings-list" aria-label="게임 환경 설정">
+        <label class="toggle-row" for="musicToggle">
+          <span>
+            <strong>배경음악</strong>
+            <small id="musicStatus" aria-live="polite">Below the Bedrock · 게임 시작 후 반복 재생</small>
+          </span>
+          <input id="musicToggle" type="checkbox" checked>
+        </label>
+
+        <label class="toggle-row" for="reducedMotionToggle">
+          <span>
+            <strong>모션 감소</strong>
+            <small>클릭 효과와 화면 움직임을 줄입니다.</small>
+          </span>
+          <input id="reducedMotionToggle" type="checkbox">
+        </label>
+      </div>
 
       <div class="dialog-actions feature-dialog-actions">
         <button class="pixel-button dialog-close" type="button" data-close-dialog="saveManagementDialog">게임으로 돌아가기</button>

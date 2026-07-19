@@ -19,6 +19,7 @@
   const MAX_SAVE_CODE_LENGTH = 200_000;
   const MAX_VISIBLE_TOASTS = 3;
   const TOAST_DURATION_MS = 3_600;
+  const BACKGROUND_MUSIC_VOLUME = 0.22;
 
   const UPGRADE_DEFINITIONS = Object.freeze([
     {
@@ -197,6 +198,7 @@
 
   function initialize() {
     cacheDom();
+    configureBackgroundMusic();
     bindEvents();
     drawOreSprite();
     prepareProtocolGate();
@@ -221,6 +223,9 @@
       "achievementsMenuButton",
       "achievementMenuBadge",
       "saveMenuButton",
+      "backgroundMusic",
+      "musicToggle",
+      "musicStatus",
       "currencyValue",
       "perClickValue",
       "perSecondValue",
@@ -267,6 +272,12 @@
     dom = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
   }
 
+  function configureBackgroundMusic() {
+    dom.backgroundMusic.volume = BACKGROUND_MUSIC_VOLUME;
+    dom.backgroundMusic.loop = true;
+    dom.backgroundMusic.addEventListener("error", handleBackgroundMusicError);
+  }
+
   function bindEvents() {
     dom.startButton.addEventListener("click", openStartStorageDialog);
     dom.confirmStartButton.addEventListener("click", handleStart);
@@ -301,6 +312,7 @@
       dom.confirmResetButton.disabled = !dom.resetConfirm.checked;
     });
     dom.confirmResetButton.addEventListener("click", resetGame);
+    dom.musicToggle.addEventListener("change", handleMusicSetting);
     dom.reducedMotionToggle.addEventListener("change", handleMotionSetting);
 
     document.querySelectorAll("[data-close-dialog]").forEach((button) => {
@@ -383,6 +395,7 @@
 
     const offlineResult = advanceDataTo(state, Date.now(), true);
     applyMotionSetting();
+    applyMusicSetting({ attemptPlayback: true, notifyBlocked: true });
     buildUpgradeCards();
     buildAchievementCards();
     evaluateAchievements(true);
@@ -426,6 +439,7 @@
         offlineEarned: 0,
       },
       settings: {
+        musicEnabled: true,
         reducedMotion: false,
       },
       lastProcessedAt: now,
@@ -459,6 +473,7 @@
         offlineEarned: data.stats.offlineEarned,
       },
       settings: {
+        musicEnabled: data.settings.musicEnabled,
         reducedMotion: data.settings.reducedMotion,
       },
       lastProcessedAt: data.lastProcessedAt,
@@ -557,6 +572,10 @@
       achievements[id] = validatedNumber(unlockedAt, `업적 ${id} 해금 시각`, Number.MAX_SAFE_INTEGER, true);
     }
 
+    const musicEnabled = input.settings.musicEnabled ?? true;
+    if (typeof musicEnabled !== "boolean") {
+      throw new SaveValidationError("배경음악 설정이 올바르지 않습니다.");
+    }
     if (typeof input.settings.reducedMotion !== "boolean") {
       throw new SaveValidationError("모션 감소 설정이 올바르지 않습니다.");
     }
@@ -572,6 +591,7 @@
         offlineEarned: validatedNumber(input.stats.offlineEarned, "오프라인 누적 광석"),
       },
       settings: {
+        musicEnabled,
         reducedMotion: input.settings.reducedMotion,
       },
       lastProcessedAt: validatedNumber(input.lastProcessedAt, "마지막 처리 시각", Number.MAX_SAFE_INTEGER, true),
@@ -778,6 +798,7 @@
     sessionBlocked = true;
     sessionStarted = false;
     stopSessionTimers();
+    pauseBackgroundMusic("일시 정지 · 다른 탭에서 실행 중입니다.");
     dom.gameApp.classList.add("is-hidden");
     dom.gameApp.setAttribute("aria-hidden", "true");
     dom.startOverlay.classList.remove("is-hidden");
@@ -1321,6 +1342,7 @@
 
       state = importedData;
       applyMotionSetting();
+      applyMusicSetting({ attemptPlayback: true, notifyBlocked: true });
       evaluateAchievements(true);
       renderAll();
       const saved = saveGame("불러오기 완료", false);
@@ -1354,6 +1376,7 @@
     const recoveryRemoved = !storageState.available || safeRemoveItem(CORRUPT_SAVE_KEY);
     state = createDefaultData();
     applyMotionSetting();
+    applyMusicSetting({ attemptPlayback: true, notifyBlocked: true });
     evaluateAchievements(false);
     renderAll();
     const saved = saveGame("초기화 완료", false);
@@ -1377,6 +1400,108 @@
     scheduleMutationSave();
   }
 
+  function handleMusicSetting() {
+    if (!state) return;
+    state.settings.musicEnabled = dom.musicToggle.checked;
+    applyMusicSetting({ attemptPlayback: true, notifyBlocked: true });
+    scheduleMutationSave();
+  }
+
+  function applyMusicSetting(options = {}) {
+    if (!state) return;
+    const attemptPlayback = options.attemptPlayback === true;
+    const notifyBlocked = options.notifyBlocked === true;
+    dom.musicToggle.checked = state.settings.musicEnabled;
+
+    if (!state.settings.musicEnabled) {
+      pauseBackgroundMusic("꺼짐 · 설정에서 다시 켤 수 있습니다.");
+      return;
+    }
+
+    if (!sessionStarted) {
+      pauseBackgroundMusic("켜짐 · 게임 시작 후 재생합니다.");
+      return;
+    }
+
+    if (sessionBlocked) {
+      pauseBackgroundMusic("일시 정지 · 다른 탭에서 실행 중입니다.");
+      return;
+    }
+
+    if (document.hidden) {
+      pauseBackgroundMusic("일시 정지 · 탭으로 돌아오면 재생합니다.");
+      return;
+    }
+
+    if (attemptPlayback || dom.backgroundMusic.paused) {
+      playBackgroundMusic(notifyBlocked);
+      return;
+    }
+
+    setMusicStatus("재생 중 · Below the Bedrock", false);
+  }
+
+  function playBackgroundMusic(notifyBlocked = false) {
+    if (!state || !state.settings.musicEnabled || !sessionStarted || sessionBlocked || document.hidden) return;
+
+    dom.backgroundMusic.volume = BACKGROUND_MUSIC_VOLUME;
+    setMusicStatus("재생 준비 중 · Below the Bedrock", false);
+
+    try {
+      const playback = dom.backgroundMusic.play();
+      if (!playback || typeof playback.then !== "function") {
+        setMusicStatus("재생 중 · Below the Bedrock", false);
+        return;
+      }
+
+      playback
+        .then(() => {
+          if (state?.settings.musicEnabled && sessionStarted && !sessionBlocked && !document.hidden) {
+            setMusicStatus("재생 중 · Below the Bedrock", false);
+          }
+        })
+        .catch(() => {
+          if (!state?.settings.musicEnabled || sessionBlocked || document.hidden) return;
+          setMusicStatus("재생이 차단됨 · 배경음악을 껐다 켜주세요.", true);
+          if (notifyBlocked) {
+            showToast("브라우저가 배경음악 재생을 차단했습니다. 설정에서 다시 켜주세요.", {
+              error: true,
+              key: "audio:bgm-blocked",
+            });
+          }
+        });
+    } catch {
+      setMusicStatus("재생이 차단됨 · 배경음악을 껐다 켜주세요.", true);
+      if (notifyBlocked) {
+        showToast("브라우저가 배경음악 재생을 차단했습니다. 설정에서 다시 켜주세요.", {
+          error: true,
+          key: "audio:bgm-blocked",
+        });
+      }
+    }
+  }
+
+  function pauseBackgroundMusic(statusMessage) {
+    dom.backgroundMusic.pause();
+    if (statusMessage) setMusicStatus(statusMessage, false);
+  }
+
+  function handleBackgroundMusicError() {
+    pauseBackgroundMusic("재생 오류 · 음악 파일을 확인해주세요.");
+    setMusicStatus("재생 오류 · 음악 파일을 확인해주세요.", true);
+    if (sessionStarted) {
+      showToast("배경음악 파일을 재생할 수 없습니다.", {
+        error: true,
+        key: "audio:bgm-error",
+      });
+    }
+  }
+
+  function setMusicStatus(message, error) {
+    dom.musicStatus.textContent = message;
+    dom.musicStatus.classList.toggle("is-error", error);
+  }
+
   function applyMotionSetting() {
     if (!state) return;
     dom.reducedMotionToggle.checked = state.settings.reducedMotion;
@@ -1387,11 +1512,13 @@
     if (!sessionStarted || sessionBlocked) return;
     if (document.hidden) {
       saveGame("백그라운드 저장");
+      pauseBackgroundMusic("일시 정지 · 탭으로 돌아오면 재생합니다.");
     } else {
       advanceDataTo(state, Date.now(), false);
       evaluateAchievements(true);
       renderAll();
       refreshTabLease();
+      applyMusicSetting({ attemptPlayback: true });
     }
   }
 
@@ -1399,6 +1526,7 @@
     if (!sessionStarted || sessionBlocked) return;
     pageIsHiding = true;
     saveGame("페이지 종료 저장");
+    pauseBackgroundMusic("일시 정지 · 페이지를 다시 열면 재생합니다.");
     releaseTabLease();
   }
 
@@ -1414,11 +1542,13 @@
     }
     advanceDataTo(state, Date.now(), false);
     renderAll();
+    applyMusicSetting({ attemptPlayback: true });
   }
 
   function handleBeforeUnload() {
     if (!sessionStarted || sessionBlocked) return;
     if (!pageIsHiding) saveGame("종료 직전 저장");
+    pauseBackgroundMusic();
     releaseTabLease();
   }
 

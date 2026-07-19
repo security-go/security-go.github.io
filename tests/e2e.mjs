@@ -198,6 +198,31 @@ async function run() {
     await writeFile(START_SCREENSHOT_PATH, Buffer.from(startScreenshot.data, "base64"));
     pass("HTTP 최초 화면은 전용 광산 이미지 위에 활성 게임 시작 버튼 하나만 표시한다");
 
+    const musicAsset = await page.evaluate(`(async () => {
+      const audio = document.getElementById('backgroundMusic');
+      const response = await fetch(audio.getAttribute('src'), { method: 'HEAD' });
+      return {
+        ok: response.ok,
+        contentType: response.headers.get('content-type'),
+        source: audio.getAttribute('src'),
+        loop: audio.loop,
+        autoplay: audio.autoplay,
+        preload: audio.preload,
+        volume: audio.volume
+      };
+    })()`);
+    assert(
+      musicAsset.ok &&
+        musicAsset.contentType?.includes("audio") &&
+        musicAsset.source === "assets/Below_the_Bedrock.mp3" &&
+        musicAsset.loop &&
+        !musicAsset.autoplay &&
+        musicAsset.preload === "metadata" &&
+        Math.abs(musicAsset.volume - 0.22) < 0.001,
+      `배경음악 자산 또는 초기 설정이 올바르지 않습니다: ${JSON.stringify(musicAsset)}`,
+    );
+    pass("Below the Bedrock MP3를 낮은 음량의 반복 배경음악으로 준비하고 자동재생은 사용하지 않는다");
+
     await openStartNotice(page);
     const startNotice = await page.evaluate(`(() => ({
       text: document.querySelector('#startStorageDialog .storage-warning').textContent,
@@ -226,8 +251,10 @@ async function run() {
       !document.getElementById('storageUsage').textContent.includes('확인 중') &&
       !document.getElementById('saveSize').textContent.includes('확인 중')
     `);
+    await waitFor(page, "!document.getElementById('musicStatus').textContent.includes('준비 중')", 8_000);
     const started = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      const audio = document.getElementById('backgroundMusic');
       return {
         version: save.version,
         label: save.meta.label,
@@ -236,7 +263,11 @@ async function run() {
         storageStatus: document.getElementById('localStorageStatus').textContent,
         persistenceStatus: document.getElementById('persistenceStatus').textContent,
         storageUsage: document.getElementById('storageUsage').textContent,
-        saveSize: document.getElementById('saveSize').textContent
+        saveSize: document.getElementById('saveSize').textContent,
+        musicEnabled: save.data.settings.musicEnabled,
+        musicChecked: document.getElementById('musicToggle').checked,
+        musicStatus: document.getElementById('musicStatus').textContent,
+        musicPaused: audio.paused
       };
     })()`);
     assert(started.version === 1 && started.label === "픽셀 광산", "v1 로컬 세이브가 생성되지 않았습니다.");
@@ -246,6 +277,11 @@ async function run() {
     assert(started.persistenceStatus.includes("승인") || started.persistenceStatus.includes("삭제 가능"), "저장 보호 결과가 표시되지 않았습니다.");
     assert(started.storageUsage.includes("Origin") && started.saveSize.includes("UTF-8 JSON"), "Origin 사용량과 세이브 크기가 구분되지 않았습니다.");
     pass("저장 보호 결과, Origin 예상 사용량, 세이브 UTF-8 크기를 구분해 표시한다");
+    assert(
+      started.musicEnabled && started.musicChecked && started.musicStatus.includes("재생 중") && !started.musicPaused,
+      `게임 시작 제스처에서 배경음악이 재생되지 않았습니다: ${JSON.stringify(started)}`,
+    );
+    pass("게임 시작 제스처에서 기본 활성화된 배경음악을 반복 재생한다");
 
     const featureNavigation = await page.evaluate(`(() => {
       const gameApp = document.getElementById('gameApp');
@@ -326,15 +362,47 @@ async function run() {
         hasImport: dialog.contains(document.getElementById('importOpenButton')),
         hasReset: dialog.contains(document.getElementById('resetOpenButton')),
         hasManualSave: dialog.contains(document.getElementById('manualSaveButton')),
-        hasStorageDetails: dialog.contains(document.querySelector('.storage-details'))
+        hasStorageDetails: dialog.contains(document.querySelector('.storage-details')),
+        hasMusicToggle: dialog.contains(document.getElementById('musicToggle')),
+        musicStatus: document.getElementById('musicStatus').textContent
       };
     })()`);
     assert(
-      saveMenu.expanded === "true" && saveMenu.hasExport && saveMenu.hasImport && saveMenu.hasReset && saveMenu.hasManualSave && saveMenu.hasStorageDetails,
+      saveMenu.expanded === "true" && saveMenu.hasExport && saveMenu.hasImport && saveMenu.hasReset && saveMenu.hasManualSave && saveMenu.hasStorageDetails && saveMenu.hasMusicToggle && saveMenu.musicStatus.includes("재생 중"),
       `저장 팝업 내용이 올바르지 않습니다: ${JSON.stringify(saveMenu)}`,
     );
     const saveMenuScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
     await writeFile(SAVE_MENU_SCREENSHOT_PATH, Buffer.from(saveMenuScreenshot.data, "base64"));
+
+    await page.evaluate(`(() => {
+      const toggle = document.getElementById('musicToggle');
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(page, "JSON.parse(localStorage.getItem('pixelMine.save')).data.settings.musicEnabled === false", 8_000);
+    const musicOff = await page.evaluate(`(() => ({
+      paused: document.getElementById('backgroundMusic').paused,
+      checked: document.getElementById('musicToggle').checked,
+      status: document.getElementById('musicStatus').textContent
+    }))()`);
+    assert(musicOff.paused && !musicOff.checked && musicOff.status.includes("꺼짐"), `배경음악 끄기 상태가 올바르지 않습니다: ${JSON.stringify(musicOff)}`);
+
+    await page.evaluate(`(() => {
+      const toggle = document.getElementById('musicToggle');
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(page, "JSON.parse(localStorage.getItem('pixelMine.save')).data.settings.musicEnabled === true && document.getElementById('musicStatus').textContent.includes('재생 중')", 8_000);
+    const musicOn = await page.evaluate(`(() => ({
+      paused: document.getElementById('backgroundMusic').paused,
+      checked: document.getElementById('musicToggle').checked,
+      status: document.getElementById('musicStatus').textContent
+    }))()`);
+    assert(!musicOn.paused && musicOn.checked && musicOn.status.includes("재생 중"), `배경음악 켜기 상태가 올바르지 않습니다: ${JSON.stringify(musicOn)}`);
+    pass("저장 팝업에서 배경음악을 끄고 다시 켜며 선택을 로컬 세이브에 보존한다");
+
     await page.evaluate("document.querySelector('[data-close-dialog=\"saveManagementDialog\"]').click(); true");
     await waitFor(page, "!document.getElementById('saveManagementDialog').open && document.getElementById('saveMenuButton').getAttribute('aria-expanded') === 'false'");
     pass("저장 아이콘으로 저장 상태·백업·복원·초기화 기능 팝업을 열고 닫는다");
@@ -468,6 +536,13 @@ async function run() {
     })()`);
     await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).data.currency === 6");
 
+    await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      delete save.data.settings.musicEnabled;
+      localStorage.setItem('pixelMine.save', JSON.stringify(save));
+      return true;
+    })()`);
+
     await reload(page);
     const beforeResume = await page.evaluate(`(() => ({
       overlay: !document.getElementById('startOverlay').classList.contains('is-hidden'),
@@ -480,10 +555,12 @@ async function run() {
     const resumed = await page.evaluate(`(() => ({
       level: JSON.parse(localStorage.getItem('pixelMine.save')).data.upgrades.worn_pickaxe,
       clicks: JSON.parse(localStorage.getItem('pixelMine.save')).data.totalClicks,
+      musicEnabled: JSON.parse(localStorage.getItem('pixelMine.save')).data.settings.musicEnabled,
       shown: document.getElementById('currencyValue').textContent
     }))()`);
-    assert(resumed.level === 1 && resumed.clicks === 13 && resumed.shown === "6", "새로고침 복원 결과가 일치하지 않습니다.");
+    assert(resumed.level === 1 && resumed.clicks === 13 && resumed.musicEnabled === true && resumed.shown === "6", "새로고침 복원 결과가 일치하지 않습니다.");
     pass("새로고침 후에도 시작 버튼을 거쳐 기존 진행도를 복원한다");
+    pass("배경음악 필드가 없는 기존 v1 세이브를 기본 활성 상태로 보완한다");
 
     await reload(page);
     await page.evaluate(`(() => {
