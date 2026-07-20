@@ -174,7 +174,24 @@
             <p id="mineShaftEyebrow" class="eyebrow">MINE SHAFT 01</p>
             <h2 id="mineHeading">광맥 채굴</h2>
           </div>
-          <span id="currentOreBadge" class="section-badge">석탄 · 1/6</span>
+          <div class="mine-heading-actions">
+            <button
+              id="characterMenuButton"
+              class="character-menu-button"
+              type="button"
+              aria-label="광부 선택 열기, 여자 광부와 기본 광부복 적용 중"
+              aria-haspopup="dialog"
+              aria-controls="characterDialog"
+              aria-expanded="false"
+              title="광부 선택"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M8 8a4 4 0 1 1 8 0M6 8h12M9 4h6M7 21v-5c0-3 2-5 5-5s5 2 5 5v5M4 21h16"></path>
+              </svg>
+              <span id="characterMenuLabel">여자 · 기본</span>
+            </button>
+            <span id="currentOreBadge" class="section-badge">석탄 · 1/6</span>
+          </div>
         </div>
 
         <div id="oreProgressionBonus" class="ore-progression-bonus" aria-live="polite">
@@ -189,9 +206,11 @@
             <span id="currentOreStageLabel">STAGE 01</span>
             <strong id="currentOreName">석탄</strong>
           </div>
+          <div id="minerActor" class="miner-actor" aria-hidden="true">
+            <canvas id="minerCanvas" width="360" height="418"></canvas>
+          </div>
           <button id="mineButton" class="mine-button" type="button" aria-label="광맥을 채굴해 광석 획득">
             <canvas id="oreCanvas" width="24" height="24" aria-hidden="true"></canvas>
-            <span id="mineButtonLabel" class="mine-button-label">석탄 채굴</span>
             <span id="mineGainLabel" class="mine-button-gain">+1 광석</span>
           </button>
         </div>
@@ -229,8 +248,7 @@
     </div>
 
     <footer class="game-footer">
-      <span>PIXEL MINE v1.3</span>
-      <span>NO LOGIN · NO CLOUD · LOCAL SAVE</span>
+      <span>PIXEL MINE v1.4</span>
     </footer>
   </main>
 
@@ -241,6 +259,72 @@
     aria-atomic="false"
     aria-relevant="additions text"
   ></div>
+
+  <dialog
+    id="characterDialog"
+    class="pixel-dialog pixel-dialog--wide"
+    aria-labelledby="characterDialogHeading"
+    data-trigger="characterMenuButton"
+  >
+    <div class="dialog-content character-dialog-content">
+      <button
+        class="dialog-icon-close"
+        type="button"
+        aria-label="광부 선택 닫기"
+        data-close-dialog="characterDialog"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M5 5 19 19M19 5 5 19"></path>
+        </svg>
+      </button>
+      <p class="eyebrow">MINER CUSTOMIZE</p>
+      <h2 id="characterDialogHeading">광부 선택</h2>
+      <p class="character-dialog-description">캐릭터와 복장을 선택하세요. 광산에서는 옆모습으로 왕복하고 이동 방향에 따라 자동으로 좌우 반전됩니다.</p>
+
+      <div class="character-customizer">
+        <div class="character-dialog-preview" aria-label="선택한 광부 미리보기">
+          <canvas
+            id="characterDialogCanvas"
+            width="360"
+            height="418"
+            role="img"
+            aria-label="기본 광부복 여자 광부 앞모습"
+          ></canvas>
+        </div>
+
+        <div class="character-selector-controls">
+          <label class="character-selector-control" for="gameCharacterSelect">
+            <span>캐릭터</span>
+            <select id="gameCharacterSelect">
+              <option value="female">여자 광부</option>
+              <option value="male">남자 광부</option>
+              <option value="dwarf">드워프 광부</option>
+            </select>
+          </label>
+
+          <label class="character-selector-control" for="gameOutfitSelect">
+            <span>복장</span>
+            <select id="gameOutfitSelect">
+              <option value="workwear">기본 광부복</option>
+              <option value="casual">캐주얼</option>
+              <option value="space">우주복</option>
+            </select>
+          </label>
+
+          <div class="character-behavior-note" role="note">
+            <strong>현재 동작</strong>
+            <span>대기: 앞모습 · 이동: 옆모습 · 클릭: 곡괭이 포즈</span>
+          </div>
+        </div>
+      </div>
+
+      <p id="characterDialogStatus" class="dialog-status" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button id="applyCharacterButton" class="pixel-button pixel-button--primary" type="button">이 광부 적용</button>
+        <button class="pixel-button dialog-close" type="button" data-close-dialog="characterDialog">취소</button>
+      </div>
+    </div>
+  </dialog>
 
   <dialog
     id="mineralCatalogDialog"
@@ -424,7 +508,7 @@
       <h2>세이브 코드 불러오기</h2>
       <p id="importDialogDescription">검증이 완료된 코드만 현재 진행도를 대체합니다. 불러오기 전에 현재 세이브를 내보내는 것을 권장합니다.</p>
       <label class="field-label" for="importCode">세이브 코드 붙여넣기</label>
-      <textarea id="importCode" class="save-code-field" rows="8" spellcheck="false" autocomplete="off" placeholder="PIXELMINE-V3:..."></textarea>
+      <textarea id="importCode" class="save-code-field" rows="8" spellcheck="false" autocomplete="off" placeholder="PIXELMINE-V4:..."></textarea>
       <p id="importStatus" class="dialog-status" aria-live="polite"></p>
       <div class="dialog-actions">
         <button id="confirmImportButton" class="pixel-button pixel-button--primary" type="button">검증 후 불러오기</button>

@@ -13,10 +13,12 @@ const START_NOTICE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-notice.png";
 const START_MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-mobile.png";
 const START_NOTICE_MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-notice-mobile.png";
 const MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-mobile.png";
+const MOBILE_SHOP_SCREENSHOT_PATH = "/tmp/pixel-mine-shop-mobile.png";
 const MINERAL_CATALOG_SCREENSHOT_PATH = "/tmp/pixel-mine-minerals.png";
 const ACHIEVEMENTS_SCREENSHOT_PATH = "/tmp/pixel-mine-achievements.png";
 const SAVE_MENU_SCREENSHOT_PATH = "/tmp/pixel-mine-save-menu.png";
 const TOAST_SCREENSHOT_PATH = "/tmp/pixel-mine-toast-mobile.png";
+const CHARACTER_DEMO_SCREENSHOT_PATH = "/tmp/pixel-mine-character-demo.png";
 const DEBUG_BASE = `http://${DEBUG_HOST}:${DEBUG_PORT}`;
 
 const passed = [];
@@ -175,6 +177,9 @@ async function run() {
       deviceScaleFactor: 1,
       mobile: false,
     });
+    await page.send("Emulation.setEmulatedMedia", {
+      features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
+    });
     await navigate(page, BASE_URL);
     await waitFor(page, "document.getElementById('protocolStatus')?.textContent.includes('HTTP')");
     await page.evaluate("localStorage.clear(); true");
@@ -267,15 +272,23 @@ async function run() {
         saveSize: document.getElementById('saveSize').textContent,
         musicEnabled: save.data.settings.musicEnabled,
         selectedOreId: save.data.selectedOreId,
+        cosmetics: save.data.cosmetics,
         musicChecked: document.getElementById('musicToggle').checked,
         musicStatus: document.getElementById('musicStatus').textContent,
         musicPaused: audio.paused
       };
     })()`);
-    assert(started.version === 3 && started.label === "픽셀 광산" && started.selectedOreId === "coal", "v3 로컬 세이브가 생성되지 않았습니다.");
+    assert(
+      started.version === 4 &&
+        started.label === "픽셀 광산" &&
+        started.selectedOreId === "coal" &&
+        started.cosmetics.characterId === "female" &&
+        started.cosmetics.outfitId === "workwear",
+      "v4 로컬 세이브 또는 기본 캐릭터 설정이 생성되지 않았습니다.",
+    );
     assert(started.upgrades === 7 && started.achievements === 13, "업그레이드 또는 업적 개수가 다릅니다.");
     assert(started.storageStatus.includes("사용 가능"), "HTTP localStorage가 사용 가능 상태가 아닙니다.");
-    pass("게임 시작 후 v3 세이브, 선택 광맥, 일반 업그레이드 6종, 광맥 마일스톤, 업적 13종을 초기화한다");
+    pass("게임 시작 후 v4 세이브, 기본 광부, 선택 광맥, 일반 업그레이드 6종, 광맥 마일스톤, 업적 13종을 초기화한다");
     assert(started.persistenceStatus.includes("승인") || started.persistenceStatus.includes("삭제 가능"), "저장 보호 결과가 표시되지 않았습니다.");
     assert(started.storageUsage.includes("Origin") && started.saveSize.includes("UTF-8 JSON"), "Origin 사용량과 세이브 크기가 구분되지 않았습니다.");
     pass("저장 보호 결과, Origin 예상 사용량, 세이브 UTF-8 크기를 구분해 표시한다");
@@ -284,6 +297,84 @@ async function run() {
       `게임 시작 제스처에서 배경음악이 재생되지 않았습니다: ${JSON.stringify(started)}`,
     );
     pass("게임 시작 제스처에서 기본 활성화된 배경음악을 반복 재생한다");
+
+    await waitFor(page, "document.getElementById('minerActor').dataset.ready === 'true' && document.getElementById('minerCanvas').dataset.pose === 'side'", 8_000);
+    const actorStart = await page.evaluate(`(() => {
+      const actor = document.getElementById('minerActor');
+      const canvas = document.getElementById('minerCanvas');
+      return {
+        character: actor.dataset.character,
+        outfit: actor.dataset.outfit,
+        pose: actor.dataset.pose,
+        facing: actor.dataset.facing,
+        x: Number(actor.dataset.x),
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+        pointerEvents: getComputedStyle(actor).pointerEvents
+      };
+    })()`);
+    await delay(350);
+    const actorMovedX = await page.evaluate("Number(document.getElementById('minerActor').dataset.x)");
+    assert(
+      actorStart.character === "female" &&
+        actorStart.outfit === "workwear" &&
+        actorStart.pose === "side" &&
+        actorStart.facing === "right" &&
+        actorStart.canvasWidth === 360 &&
+        actorStart.canvasHeight === 418 &&
+        actorStart.pointerEvents === "none" &&
+        actorMovedX > actorStart.x,
+      `기본 광부 Canvas 또는 오른쪽 이동 상태가 올바르지 않습니다: ${JSON.stringify({ actorStart, actorMovedX })}`,
+    );
+
+    await page.evaluate("document.getElementById('characterMenuButton').click(); true");
+    await waitFor(page, "document.getElementById('characterDialog').open");
+    await page.evaluate(`(() => {
+      const character = document.getElementById('gameCharacterSelect');
+      const outfit = document.getElementById('gameOutfitSelect');
+      character.value = 'dwarf';
+      character.dispatchEvent(new Event('change', { bubbles: true }));
+      outfit.value = 'space';
+      outfit.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(page, "document.getElementById('characterDialogCanvas').dataset.character === 'dwarf' && document.getElementById('characterDialogCanvas').dataset.outfit === 'space' && document.getElementById('characterDialogCanvas').dataset.pose === 'front'", 8_000);
+    await page.evaluate("document.getElementById('applyCharacterButton').click(); true");
+    await waitFor(page, "!document.getElementById('characterDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics.characterId === 'dwarf' && document.getElementById('minerCanvas').dataset.character === 'dwarf' && document.getElementById('minerCanvas').dataset.outfit === 'space'", 8_000);
+    const characterSelection = await page.evaluate(`(() => ({
+      label: document.getElementById('characterMenuLabel').textContent,
+      character: document.getElementById('minerActor').dataset.character,
+      outfit: document.getElementById('minerActor').dataset.outfit,
+      saved: JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics
+    }))()`);
+    assert(
+      characterSelection.label.includes("드워프") &&
+        characterSelection.label.includes("우주복") &&
+        characterSelection.character === "dwarf" &&
+        characterSelection.outfit === "space" &&
+        characterSelection.saved.characterId === "dwarf" &&
+        characterSelection.saved.outfitId === "space",
+      `캐릭터 선택 또는 저장 결과가 올바르지 않습니다: ${JSON.stringify(characterSelection)}`,
+    );
+    pass("여자·남자·드워프와 3종 의상을 선택 팝업에서 조합하고 즉시 v4 세이브에 보존한다");
+
+    await waitFor(page, "document.getElementById('minerActor').dataset.facing === 'left' && document.getElementById('minerActor').dataset.pose === 'side'", 15_000);
+    const leftMovementStart = await page.evaluate("Number(document.getElementById('minerActor').dataset.x)");
+    await delay(350);
+    const leftMovementEnd = await page.evaluate("Number(document.getElementById('minerActor').dataset.x)");
+    const flippedActor = await page.evaluate(`(() => ({
+      actorFacing: document.getElementById('minerActor').dataset.facing,
+      canvasFacing: document.getElementById('minerCanvas').dataset.facing,
+      pose: document.getElementById('minerCanvas').dataset.pose
+    }))()`);
+    assert(
+      leftMovementEnd < leftMovementStart &&
+        flippedActor.actorFacing === "left" &&
+        flippedActor.canvasFacing === "left" &&
+        flippedActor.pose === "side",
+      `캐릭터 좌측 이동 또는 Canvas 반전 결과가 올바르지 않습니다: ${JSON.stringify({ leftMovementStart, leftMovementEnd, flippedActor })}`,
+    );
+    pass("광부가 광산 안을 좌우로 왕복하고 진행 방향에 맞춰 Canvas 이미지를 반전한다");
 
     const featureNavigation = await page.evaluate(`(() => {
       const gameApp = document.getElementById('gameApp');
@@ -491,6 +582,35 @@ async function run() {
       return true;
     })()`);
     await delay(100);
+    await waitFor(page, "document.getElementById('minerActor').dataset.pose === 'mining' && document.getElementById('minerCanvas').dataset.pose === 'mining'", 2_000);
+    const miningPose = await page.evaluate(`(() => ({
+      actorPose: document.getElementById('minerActor').dataset.pose,
+      canvasPose: document.getElementById('minerCanvas').dataset.pose,
+      actorFacing: document.getElementById('minerActor').dataset.facing,
+      canvasFacing: document.getElementById('minerCanvas').dataset.facing,
+      mineButtonZ: getComputedStyle(document.getElementById('mineButton')).zIndex,
+      oreZ: Number(getComputedStyle(document.getElementById('oreCanvas')).zIndex),
+      actorZ: Number(getComputedStyle(document.getElementById('minerActor')).zIndex),
+      gainZ: Number(getComputedStyle(document.getElementById('mineGainLabel')).zIndex),
+      effectZ: Number(getComputedStyle(document.querySelector('.floating-gain')).zIndex),
+      actorPointerEvents: getComputedStyle(document.getElementById('minerActor')).pointerEvents,
+      miningLabelRemoved: !document.getElementById('mineButtonLabel') && !document.querySelector('.mine-button-label')
+    }))()`);
+    assert(
+      miningPose.actorPose === "mining" &&
+        miningPose.canvasPose === "mining" &&
+        miningPose.actorFacing === miningPose.canvasFacing &&
+        miningPose.mineButtonZ === "auto" &&
+        miningPose.oreZ < miningPose.actorZ &&
+        miningPose.actorZ < miningPose.gainZ &&
+        miningPose.actorZ < miningPose.effectZ &&
+        miningPose.actorPointerEvents === "none" &&
+        miningPose.miningLabelRemoved,
+      `채굴 클릭 포즈 또는 반전 방향이 올바르지 않습니다: ${JSON.stringify(miningPose)}`,
+    );
+    await waitFor(page, "document.getElementById('minerActor').dataset.pose === 'side' && document.getElementById('minerCanvas').dataset.pose === 'side'", 2_000);
+    pass("광맥 클릭 시 곡괭이 포즈로 전환하고 짧은 동작 뒤 걷기 포즈로 복귀한다");
+
     const progressed = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
       return {
@@ -539,16 +659,22 @@ async function run() {
     await page.evaluate("document.getElementById('saveMenuButton').click(); true");
     await waitFor(page, "document.getElementById('saveManagementDialog').open");
     await page.evaluate("document.getElementById('exportButton').click(); true");
-    await waitFor(page, "document.getElementById('saveManagementDialog').open && document.getElementById('exportDialog').open && document.getElementById('exportCode').value.startsWith('PIXELMINE-V3:')");
+    await waitFor(page, "document.getElementById('saveManagementDialog').open && document.getElementById('exportDialog').open && document.getElementById('exportCode').value.startsWith('PIXELMINE-V4:')");
     const saveCode = await page.evaluate("document.getElementById('exportCode').value");
-    const decoded = JSON.parse(Buffer.from(saveCode.slice("PIXELMINE-V3:".length), "base64").toString("utf8"));
-    assert(decoded.version === 3 && decoded.meta.label === "픽셀 광산", "UTF-8 세이브 코드가 한글 메타데이터를 보존하지 못했습니다.");
+    const decoded = JSON.parse(Buffer.from(saveCode.slice("PIXELMINE-V4:".length), "base64").toString("utf8"));
+    assert(
+      decoded.version === 4 &&
+        decoded.meta.label === "픽셀 광산" &&
+        decoded.data.cosmetics.characterId === "dwarf" &&
+        decoded.data.cosmetics.outfitId === "space",
+      "UTF-8 세이브 코드가 한글 메타데이터 또는 캐릭터 선택을 보존하지 못했습니다.",
+    );
     pass("UTF-8 JSON 세이브 코드를 Base64로 내보내고 한글을 보존한다");
 
     await page.evaluate(`(() => {
       document.getElementById('exportDialog').close();
       document.getElementById('importOpenButton').click();
-      document.getElementById('importCode').value = 'PIXELMINE-V4:QUFBQQ==';
+      document.getElementById('importCode').value = 'PIXELMINE-V5:QUFBQQ==';
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
@@ -592,21 +718,28 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 3");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 4");
     const migratedLegacy = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
-      return { version: save.version, currency: save.data.currency, clicks: save.data.totalClicks, level: save.data.upgrades.worn_pickaxe, selectedOreId: save.data.selectedOreId };
+      return { version: save.version, currency: save.data.currency, clicks: save.data.totalClicks, level: save.data.upgrades.worn_pickaxe, selectedOreId: save.data.selectedOreId, cosmetics: save.data.cosmetics };
     })()`);
     assert(
-      migratedLegacy.version === 3 && migratedLegacy.currency === 42 && migratedLegacy.clicks === 7 && migratedLegacy.level === 2 && migratedLegacy.selectedOreId === "coal",
+      migratedLegacy.version === 4 &&
+        migratedLegacy.currency === 42 &&
+        migratedLegacy.clicks === 7 &&
+        migratedLegacy.level === 2 &&
+        migratedLegacy.selectedOreId === "coal" &&
+        migratedLegacy.cosmetics.characterId === "female" &&
+        migratedLegacy.cosmetics.outfitId === "workwear",
       `v0 저장 마이그레이션 결과가 올바르지 않습니다: ${JSON.stringify(migratedLegacy)}`,
     );
-    pass("v0 레거시 저장을 정의된 마이그레이션을 통해 v3 스키마로 복원한다");
+    pass("v0 레거시 저장을 정의된 마이그레이션을 통해 v4 스키마와 기본 광부로 복원한다");
 
     const legacyV1Payload = JSON.parse(JSON.stringify(decoded));
     legacyV1Payload.version = 1;
     delete legacyV1Payload.data.upgrades.ore_milestone;
     delete legacyV1Payload.data.selectedOreId;
+    delete legacyV1Payload.data.cosmetics;
     const legacyV1Code = `PIXELMINE-V1:${Buffer.from(JSON.stringify(legacyV1Payload), "utf8").toString("base64")}`;
     await page.evaluate(`(() => {
       document.getElementById('importOpenButton').click();
@@ -614,21 +747,27 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 3");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 4");
     const migratedV1 = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
-      return { version: save.version, milestone: save.data.upgrades.ore_milestone, selectedOreId: save.data.selectedOreId, ore: document.getElementById('mineSection').dataset.ore };
+      return { version: save.version, milestone: save.data.upgrades.ore_milestone, selectedOreId: save.data.selectedOreId, ore: document.getElementById('mineSection').dataset.ore, cosmetics: save.data.cosmetics };
     })()`);
     assert(
-      migratedV1.version === 3 && migratedV1.milestone === 0 && migratedV1.selectedOreId === "coal" && migratedV1.ore === "coal",
+      migratedV1.version === 4 &&
+        migratedV1.milestone === 0 &&
+        migratedV1.selectedOreId === "coal" &&
+        migratedV1.ore === "coal" &&
+        migratedV1.cosmetics.characterId === "female" &&
+        migratedV1.cosmetics.outfitId === "workwear",
       `v1 광맥 진행도 기본값 마이그레이션이 올바르지 않습니다: ${JSON.stringify(migratedV1)}`,
     );
-    pass("기존 v1 세이브에 광맥 개척과 선택 광맥 기본값을 보완해 v3로 자동 이관한다");
+    pass("기존 v1 세이브에 광맥·캐릭터 기본값을 보완해 v4로 자동 이관한다");
 
     const legacyV2Payload = JSON.parse(JSON.stringify(decoded));
     legacyV2Payload.version = 2;
     legacyV2Payload.data.upgrades.ore_milestone = 3;
     delete legacyV2Payload.data.selectedOreId;
+    delete legacyV2Payload.data.cosmetics;
     const legacyV2Code = `PIXELMINE-V2:${Buffer.from(JSON.stringify(legacyV2Payload), "utf8").toString("base64")}`;
     await page.evaluate(`(() => {
       document.getElementById('importOpenButton').click();
@@ -636,16 +775,51 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 3");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 4");
     const migratedV2 = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
-      return { milestone: save.data.upgrades.ore_milestone, selectedOreId: save.data.selectedOreId, ore: document.getElementById('mineSection').dataset.ore };
+      return { version: save.version, milestone: save.data.upgrades.ore_milestone, selectedOreId: save.data.selectedOreId, ore: document.getElementById('mineSection').dataset.ore, cosmetics: save.data.cosmetics };
     })()`);
     assert(
-      migratedV2.milestone === 3 && migratedV2.selectedOreId === "gold" && migratedV2.ore === "gold",
+      migratedV2.version === 4 &&
+        migratedV2.milestone === 3 &&
+        migratedV2.selectedOreId === "gold" &&
+        migratedV2.ore === "gold" &&
+        migratedV2.cosmetics.characterId === "female" &&
+        migratedV2.cosmetics.outfitId === "workwear",
       `v2 선택 광맥 마이그레이션이 올바르지 않습니다: ${JSON.stringify(migratedV2)}`,
     );
-    pass("기존 v2 세이브는 가장 높은 발견 광맥을 선택한 v3 상태로 자동 이관한다");
+    pass("기존 v2 세이브는 최고 발견 광맥과 기본 광부를 선택한 v4 상태로 자동 이관한다");
+
+    const legacyV3Payload = JSON.parse(JSON.stringify(decoded));
+    legacyV3Payload.version = 3;
+    delete legacyV3Payload.data.cosmetics;
+    const legacyV3Code = `PIXELMINE-V3:${Buffer.from(JSON.stringify(legacyV3Payload), "utf8").toString("base64")}`;
+    await page.evaluate(`(() => {
+      document.getElementById('importOpenButton').click();
+      document.getElementById('importCode').value = ${JSON.stringify(legacyV3Code)};
+      document.getElementById('confirmImportButton').click();
+      return true;
+    })()`);
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 4");
+    const migratedV3 = await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      return {
+        version: save.version,
+        cosmetics: save.data.cosmetics,
+        actorCharacter: document.getElementById('minerActor').dataset.character,
+        actorOutfit: document.getElementById('minerActor').dataset.outfit
+      };
+    })()`);
+    assert(
+      migratedV3.version === 4 &&
+        migratedV3.cosmetics.characterId === "female" &&
+        migratedV3.cosmetics.outfitId === "workwear" &&
+        migratedV3.actorCharacter === "female" &&
+        migratedV3.actorOutfit === "workwear",
+      `v3 캐릭터 기본값 마이그레이션이 올바르지 않습니다: ${JSON.stringify(migratedV3)}`,
+    );
+    pass("기존 v3 세이브에 기본 광부 설정을 보완해 v4로 자동 이관한다");
 
     await page.evaluate(`(() => {
       document.getElementById('importOpenButton').click();
@@ -675,9 +849,22 @@ async function run() {
       level: JSON.parse(localStorage.getItem('pixelMine.save')).data.upgrades.worn_pickaxe,
       clicks: JSON.parse(localStorage.getItem('pixelMine.save')).data.totalClicks,
       musicEnabled: JSON.parse(localStorage.getItem('pixelMine.save')).data.settings.musicEnabled,
+      cosmetics: JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics,
+      actorCharacter: document.getElementById('minerActor').dataset.character,
+      actorOutfit: document.getElementById('minerActor').dataset.outfit,
       shown: document.getElementById('currencyValue').textContent
     }))()`);
-    assert(resumed.level === 1 && resumed.clicks === 13 && resumed.musicEnabled === true && resumed.shown === "6", "새로고침 복원 결과가 일치하지 않습니다.");
+    assert(
+      resumed.level === 1 &&
+        resumed.clicks === 13 &&
+        resumed.musicEnabled === true &&
+        resumed.cosmetics.characterId === "dwarf" &&
+        resumed.cosmetics.outfitId === "space" &&
+        resumed.actorCharacter === "dwarf" &&
+        resumed.actorOutfit === "space" &&
+        resumed.shown === "6",
+      `새로고침 복원 결과가 일치하지 않습니다: ${JSON.stringify(resumed)}`,
+    );
     pass("새로고침 후에도 시작 버튼을 거쳐 기존 진행도를 복원한다");
     pass("배경음악 필드가 없는 기존 세이브를 기본 활성 상태로 보완한다");
 
@@ -763,7 +950,7 @@ async function run() {
         discoveryAchievement: save.data.unlockedAchievements.discover_bronze,
         ore: document.getElementById('mineSection').dataset.ore,
         shaft: document.getElementById('mineShaftEyebrow').textContent,
-        label: document.getElementById('mineButtonLabel').textContent,
+        mineAriaLabel: document.getElementById('mineButton').getAttribute('aria-label'),
         badge: document.getElementById('mineralCatalogMenuBadge').textContent,
         unlocked: document.querySelectorAll('.mineral-card.is-unlocked').length,
         current: document.querySelector('.mineral-card.is-current')?.dataset.mineralId,
@@ -782,7 +969,7 @@ async function run() {
         bronzeMilestone.discoveryAchievement > 0 &&
         bronzeMilestone.ore === "bronze" &&
         bronzeMilestone.shaft.includes("02") &&
-        bronzeMilestone.label === "브론즈 채굴" &&
+        bronzeMilestone.mineAriaLabel === "브론즈 광맥을 채굴해 광석 획득" &&
         bronzeMilestone.badge === "2/6" &&
         bronzeMilestone.unlocked === 2 &&
         bronzeMilestone.current === "bronze" &&
@@ -829,7 +1016,7 @@ async function run() {
       `발견 광맥 재선택 결과가 올바르지 않습니다: ${JSON.stringify(reselectedCoal)}`,
     );
     await page.evaluate("document.querySelector('[data-close-dialog=\"mineralCatalogDialog\"]').click(); true");
-    pass("석탄 외형을 다시 선택해도 브론즈 클릭·자동 생산 개척 배율을 유지하고 v3 세이브에 보존한다");
+    pass("석탄 외형을 다시 선택해도 브론즈 클릭·자동 생산 개척 배율을 유지하고 v4 세이브에 보존한다");
 
     await page.evaluate("document.querySelector('[data-purchase-mode=\"max\"]').click(); true");
     const maxMilestoneOffer = await page.evaluate(`(() => ({
@@ -915,13 +1102,24 @@ async function run() {
         currency: save.data.currency,
         levels: Object.values(save.data.upgrades),
         selectedOreId: save.data.selectedOreId,
+        cosmetics: save.data.cosmetics,
+        actorCharacter: document.getElementById('minerActor').dataset.character,
+        actorOutfit: document.getElementById('minerActor').dataset.outfit,
         ore: document.getElementById('mineSection').dataset.ore,
         catalogBadge: document.getElementById('mineralCatalogMenuBadge').textContent
       };
     })()`);
     assert(resetResult.unrelated === "keep", "초기화가 게임 외 localStorage 키를 삭제했습니다.");
     assert(
-      resetResult.currency === 0 && resetResult.levels.every((level) => level === 0) && resetResult.selectedOreId === "coal" && resetResult.ore === "coal" && resetResult.catalogBadge === "1/6",
+      resetResult.currency === 0 &&
+        resetResult.levels.every((level) => level === 0) &&
+        resetResult.selectedOreId === "coal" &&
+        resetResult.cosmetics.characterId === "female" &&
+        resetResult.cosmetics.outfitId === "workwear" &&
+        resetResult.actorCharacter === "female" &&
+        resetResult.actorOutfit === "workwear" &&
+        resetResult.ore === "coal" &&
+        resetResult.catalogBadge === "1/6",
       "초기화 후 새 게임 상태가 아닙니다.",
     );
     pass("확인 절차를 거친 초기화가 게임 상태만 재설정하고 다른 키를 보존한다");
@@ -938,7 +1136,7 @@ async function run() {
       currentVersion: JSON.parse(localStorage.getItem('pixelMine.save')).version,
       currentCurrency: JSON.parse(localStorage.getItem('pixelMine.save')).data.currency
     }))()`);
-    assert(corrupt.quarantined === "{broken" && corrupt.currentVersion === 3 && corrupt.currentCurrency === 0, "손상 저장 격리 또는 새 게임 폴백에 실패했습니다.");
+    assert(corrupt.quarantined === "{broken" && corrupt.currentVersion === 4 && corrupt.currentCurrency === 0, "손상 저장 격리 또는 새 게임 폴백에 실패했습니다.");
     pass("손상 JSON 원문을 별도 키에 격리하고 유효한 새 게임으로 폴백한다");
 
     await reload(page);
@@ -974,10 +1172,16 @@ async function run() {
       clickPower: document.getElementById('perClickValue').title,
       autoRate: document.getElementById('perSecondValue').title,
       progressionBonus: document.getElementById('oreProgressionBonus').textContent.replace(/\s+/g, ' ').trim(),
-      summaryText: document.querySelector('.mine-summary').textContent.replace(/\s+/g, ' ').trim()
+      summaryText: document.querySelector('.mine-summary').textContent.replace(/\s+/g, ' ').trim(),
+      footerItems: document.querySelectorAll('.game-footer > span').length,
+      footerText: document.querySelector('.game-footer').textContent.replace(/\s+/g, ' ').trim()
     }))()`);
     assert(desktopLayout.noHorizontalOverflow, "데스크톱 화면에 가로 오버플로가 있습니다.");
     assert(!desktopLayout.offlineDialogOpen, "5초 미만의 빠른 재진입에 오프라인 모달을 표시했습니다.");
+    assert(
+      desktopLayout.footerItems === 1 && desktopLayout.footerText === "PIXEL MINE v1.4",
+      `게임 버전 외 불필요한 푸터 정보가 남아 있습니다: ${JSON.stringify(desktopLayout)}`,
+    );
     assert(
       desktopLayout.topbarHeight <= 105 && desktopLayout.contentOffset <= 140 && desktopLayout.topbarStats === 3,
       `데스크톱 상단이 충분히 컴팩트하지 않습니다: ${JSON.stringify(desktopLayout)}`,
@@ -1031,26 +1235,103 @@ async function run() {
       topbarHeight: document.querySelector('.topbar').getBoundingClientRect().height,
       contentOffset: document.querySelector('.main-grid').getBoundingClientRect().top - document.querySelector('.topbar').getBoundingClientRect().top,
       statTops: [...document.querySelectorAll('.topbar-stat')].map((item) => Math.round(item.getBoundingClientRect().top)),
-      actionsBelowStats: document.querySelector('.topbar-actions').getBoundingClientRect().top >= document.querySelector('.topbar-stats').getBoundingClientRect().bottom,
-      manualSaveInDialog: document.getElementById('saveManagementDialog').contains(document.getElementById('manualSaveButton'))
+      actionsAboveStats: document.querySelector('.topbar-actions').getBoundingClientRect().bottom <= document.querySelector('.topbar-stats').getBoundingClientRect().top,
+      manualSaveInDialog: document.getElementById('saveManagementDialog').contains(document.getElementById('manualSaveButton')),
+      characterButtonRight: document.getElementById('characterMenuButton').getBoundingClientRect().right,
+      actorInsideStage: (() => {
+        const stage = document.getElementById('mineStage').getBoundingClientRect();
+        const actor = document.getElementById('minerActor').getBoundingClientRect();
+        return actor.left >= stage.left && actor.right <= stage.right && actor.bottom <= stage.bottom;
+      })(),
+      compactShop: (() => {
+        const cards = [...document.querySelectorAll('.upgrade-card')];
+        const buttons = [...document.querySelectorAll('.upgrade-buy')];
+        const descriptions = [...document.querySelectorAll('.upgrade-description')];
+        const infos = [...document.querySelectorAll('.upgrade-info')];
+        const heights = cards.map((card) => card.getBoundingClientRect().height);
+        return {
+          averageHeight: heights.reduce((sum, height) => sum + height, 0) / heights.length,
+          maxHeight: Math.max(...heights),
+          listHeight: document.querySelector('.upgrade-list').getBoundingClientRect().height,
+          cardsInside: cards.every((card) => card.scrollWidth <= card.clientWidth),
+          buttonsRight: buttons.every((button, index) => button.getBoundingClientRect().left >= infos[index].getBoundingClientRect().right),
+          buttonsUsable: buttons.every((button) => button.getBoundingClientRect().width >= 82 && button.getBoundingClientRect().height >= 44),
+          descriptionsSingleLine: descriptions.every((description) => {
+            const style = getComputedStyle(description);
+            return style.whiteSpace === 'nowrap' && style.textOverflow === 'ellipsis';
+          }),
+          cardPadding: getComputedStyle(cards[0]).padding,
+          listGap: getComputedStyle(document.querySelector('.upgrade-list')).gap
+        };
+      })()
     }))()`);
     assert(mobileLayout.scrollWidth <= mobileLayout.viewport, `모바일 화면에 가로 오버플로가 있습니다: ${JSON.stringify(mobileLayout)}`);
     assert(mobileLayout.mineWidth < mobileLayout.viewport, "모바일 광맥 버튼이 뷰포트를 벗어났습니다.");
-    assert(mobileLayout.menuRight <= mobileLayout.viewport && mobileLayout.dialogWidth <= mobileLayout.viewport, "모바일 아이콘 메뉴 또는 기능 팝업이 뷰포트를 벗어났습니다.");
     assert(
-      mobileLayout.topbarHeight <= 150 &&
-        mobileLayout.contentOffset <= 175 &&
+      mobileLayout.menuRight <= mobileLayout.viewport &&
+        mobileLayout.characterButtonRight <= mobileLayout.viewport &&
+        mobileLayout.dialogWidth <= mobileLayout.viewport &&
+        mobileLayout.actorInsideStage,
+      "모바일 아이콘 메뉴, 캐릭터 또는 기능 팝업이 뷰포트를 벗어났습니다.",
+    );
+    assert(
+      mobileLayout.topbarHeight <= 125 &&
+        mobileLayout.contentOffset <= 145 &&
         new Set(mobileLayout.statTops).size === 1 &&
-        mobileLayout.actionsBelowStats &&
+        mobileLayout.actionsAboveStats &&
         mobileLayout.manualSaveInDialog,
       `모바일 컴팩트 상단 구조가 올바르지 않습니다: ${JSON.stringify(mobileLayout)}`,
+    );
+    assert(
+      mobileLayout.compactShop.averageHeight <= 120 &&
+        mobileLayout.compactShop.maxHeight <= 135 &&
+        mobileLayout.compactShop.listHeight <= 900 &&
+        mobileLayout.compactShop.cardsInside &&
+        mobileLayout.compactShop.buttonsRight &&
+        mobileLayout.compactShop.buttonsUsable &&
+        mobileLayout.compactShop.descriptionsSingleLine &&
+        mobileLayout.compactShop.cardPadding === "8px" &&
+        mobileLayout.compactShop.listGap === "8px",
+      `모바일 고밀도 상점 카드 구성이 올바르지 않습니다: ${JSON.stringify(mobileLayout.compactShop)}`,
     );
     await page.evaluate("document.getElementById('saveManagementDialog').close(); true");
     await page.evaluate("window.scrollTo(0, 0); true");
     await delay(3_800);
     const mobileScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
     await writeFile(MOBILE_SCREENSHOT_PATH, Buffer.from(mobileScreenshot.data, "base64"));
-    pass("375px 모바일 뷰포트에서 가로 오버플로 없이 반응형 레이아웃을 유지한다");
+    await page.evaluate("document.querySelector('.shop-section').scrollIntoView({ block: 'start', behavior: 'instant' }); true");
+    await delay(120);
+    const mobileShopScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(MOBILE_SHOP_SCREENSHOT_PATH, Buffer.from(mobileShopScreenshot.data, "base64"));
+
+    await page.send("Emulation.setDeviceMetricsOverride", {
+      width: 320,
+      height: 760,
+      deviceScaleFactor: 2,
+      mobile: true,
+    });
+    await delay(100);
+    const narrowShop = await page.evaluate(`(() => {
+      const cards = [...document.querySelectorAll('.upgrade-card')];
+      return {
+        viewport: innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        cardsInside: cards.every((card) => card.scrollWidth <= card.clientWidth),
+        buttonsInside: cards.every((card) => {
+          const cardRect = card.getBoundingClientRect();
+          const buttonRect = card.querySelector('.upgrade-buy').getBoundingClientRect();
+          return buttonRect.left >= cardRect.left && buttonRect.right <= cardRect.right;
+        })
+      };
+    })()`);
+    assert(
+      narrowShop.viewport === 320 &&
+        narrowShop.scrollWidth <= narrowShop.viewport &&
+        narrowShop.cardsInside &&
+        narrowShop.buttonsInside,
+      `320px 모바일 상점에 가로 넘침이 있습니다: ${JSON.stringify(narrowShop)}`,
+    );
+    pass("320~375px 모바일에서 설명 한 줄과 우측 구매 버튼을 사용한 고밀도 상점 카드를 유지한다");
 
     await navigate(secondPage, FILE_URL);
     await waitFor(secondPage, "document.getElementById('protocolStatus')?.textContent.includes('실행 불가')", 8_000);
@@ -1181,6 +1462,167 @@ async function run() {
 
     await waitFor(secondPage, "document.querySelectorAll('#toastRegion .toast').length === 0", 5_000);
     pass("병합 시 재설정된 3.6초 타이머가 toast와 관리 상태를 함께 제거한다");
+
+    await secondPage.send("Emulation.setDeviceMetricsOverride", {
+      width: 1024,
+      height: 1000,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await navigate(secondPage, new URL("character-demo.html", BASE_URL).href);
+    await waitFor(secondPage, "document.body.dataset.characterDemoReady === 'true'", 8_000);
+
+    const characterDemoInitial = await secondPage.evaluate(`(() => {
+      const canvas = document.getElementById('characterCanvas');
+      const context = canvas.getContext('2d');
+      return {
+        width: canvas.width,
+        height: canvas.height,
+        sheet: canvas.dataset.sheet,
+        character: canvas.dataset.character,
+        pose: canvas.dataset.pose,
+        smoothing: context.imageSmoothingEnabled,
+        status: document.getElementById('characterDemoStatus').textContent,
+        demoStorageKeys: Object.keys(localStorage).filter((key) => key.toLowerCase().includes('character-demo'))
+      };
+    })()`);
+    assert(
+      characterDemoInitial.width === 360 &&
+        characterDemoInitial.height === 418 &&
+        characterDemoInitial.sheet === "workwear" &&
+        characterDemoInitial.character === "female" &&
+        characterDemoInitial.pose === "front" &&
+        characterDemoInitial.smoothing === false &&
+        characterDemoInitial.status.includes("360×418px") &&
+        characterDemoInitial.demoStorageKeys.length === 0,
+      `캐릭터 Canvas 기본 렌더링이 올바르지 않습니다: ${JSON.stringify(characterDemoInitial)}`,
+    );
+
+    const characterCombinations = await secondPage.evaluate(`(async () => {
+      const canvas = document.getElementById('characterCanvas');
+      const context = canvas.getContext('2d');
+      const outfit = document.getElementById('outfitSelect');
+      const character = document.getElementById('characterSelect');
+      const pose = document.getElementById('poseSelect');
+
+      function render(sheetKey, characterKey, poseKey) {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            canvas.removeEventListener('character-demo:rendered', handleRendered);
+            reject(new Error('캐릭터 조합 렌더링 시간 초과'));
+          }, 3_000);
+          function handleRendered(event) {
+            const detail = event.detail;
+            if (detail.sheetKey !== sheetKey || detail.characterKey !== characterKey || detail.poseKey !== poseKey) return;
+            clearTimeout(timer);
+            canvas.removeEventListener('character-demo:rendered', handleRendered);
+            resolve();
+          }
+          canvas.addEventListener('character-demo:rendered', handleRendered);
+          outfit.value = sheetKey;
+          character.value = characterKey;
+          pose.value = poseKey;
+          pose.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+
+      function fingerprint() {
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let hash = 2166136261;
+        let visiblePixels = 0;
+        let rightEdgeVisiblePixels = 0;
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index + 3] > 0) visiblePixels += 1;
+          const pixelIndex = index / 4;
+          if (pixelIndex % canvas.width >= canvas.width - 12 && pixels[index + 3] > 0) {
+            rightEdgeVisiblePixels += 1;
+          }
+          hash = Math.imul(hash ^ pixels[index], 16777619);
+          hash = Math.imul(hash ^ pixels[index + 1], 16777619);
+          hash = Math.imul(hash ^ pixels[index + 2], 16777619);
+          hash = Math.imul(hash ^ pixels[index + 3], 16777619);
+        }
+        return { hash: hash >>> 0, visiblePixels, rightEdgeVisiblePixels };
+      }
+
+      const results = [];
+      for (const sheetKey of ['workwear', 'casual', 'space']) {
+        for (const characterKey of ['female', 'male', 'dwarf']) {
+          for (const poseKey of ['front', 'side', 'mining']) {
+            await render(sheetKey, characterKey, poseKey);
+            results.push({ sheetKey, characterKey, poseKey, ...fingerprint() });
+          }
+        }
+      }
+      return results;
+    })()`);
+    assert(
+      characterCombinations.length === 27 &&
+        characterCombinations.every((item) => item.visiblePixels > 1_000) &&
+        characterCombinations
+          .filter((item) => item.sheetKey === 'workwear')
+          .every((item) => item.visiblePixels < 360 * 418) &&
+        new Set(characterCombinations.map((item) => item.hash)).size === 27 &&
+        characterCombinations
+          .filter((item) => item.poseKey === 'side')
+          .every((item) => item.rightEdgeVisiblePixels === 0),
+      `27개 캐릭터 셀 가운데 비어 있거나 중복되었거나 옆 셀 픽셀이 남은 렌더링이 있습니다: ${JSON.stringify(characterCombinations)}`,
+    );
+
+    await secondPage.evaluate(`(() => {
+      const pose = document.getElementById('poseSelect');
+      pose.value = 'front';
+      pose.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(secondPage, "document.getElementById('characterCanvas').dataset.pose === 'front'");
+    await secondPage.evaluate("document.getElementById('previewMiningButton').click(); true");
+    await waitFor(secondPage, "document.getElementById('characterCanvas').dataset.pose === 'mining'");
+    await waitFor(
+      secondPage,
+      "document.getElementById('characterCanvas').dataset.pose === 'front' && !document.getElementById('previewMiningButton').disabled",
+      3_000,
+    );
+
+    await secondPage.evaluate(`(() => {
+      document.getElementById('outfitSelect').value = 'workwear';
+      document.getElementById('characterSelect').value = 'dwarf';
+      const pose = document.getElementById('poseSelect');
+      pose.value = 'side';
+      pose.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(
+      secondPage,
+      "document.getElementById('characterCanvas').dataset.sheet === 'workwear' && document.getElementById('characterCanvas').dataset.character === 'dwarf' && document.getElementById('characterCanvas').dataset.pose === 'side'",
+    );
+
+    await secondPage.send("Emulation.setDeviceMetricsOverride", {
+      width: 375,
+      height: 812,
+      deviceScaleFactor: 2,
+      mobile: true,
+    });
+    await delay(120);
+    const characterDemoMobile = await secondPage.evaluate(`(() => ({
+      viewport: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      canvasWidth: document.getElementById('characterCanvas').getBoundingClientRect().width,
+      frameWidth: document.querySelector('.character-canvas-frame').getBoundingClientRect().width,
+      panelRight: document.querySelector('.character-demo-panel').getBoundingClientRect().right,
+      demoStorageKeys: Object.keys(localStorage).filter((key) => key.toLowerCase().includes('character-demo'))
+    }))()`);
+    assert(
+      characterDemoMobile.scrollWidth <= characterDemoMobile.viewport &&
+        characterDemoMobile.canvasWidth > 0 &&
+        characterDemoMobile.canvasWidth <= characterDemoMobile.frameWidth &&
+        characterDemoMobile.panelRight <= characterDemoMobile.viewport &&
+        characterDemoMobile.demoStorageKeys.length === 0,
+      `모바일 캐릭터 데모 또는 저장 격리가 올바르지 않습니다: ${JSON.stringify(characterDemoMobile)}`,
+    );
+    const characterDemoScreenshot = await secondPage.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(CHARACTER_DEMO_SCREENSHOT_PATH, Buffer.from(characterDemoScreenshot.data, "base64"));
+    pass("투명 기본 광부복·캐주얼·우주복 27개 셀을 세로형 Canvas로 렌더링하고 셀 침범 제거·포즈 전환·모바일·세이브 격리를 유지한다");
 
     await navigate(secondPage, BASE_URL);
     await waitFor(secondPage, "document.getElementById('protocolStatus')?.classList.contains('is-good') && !document.getElementById('startButton').disabled", 8_000);

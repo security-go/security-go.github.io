@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const SAVE_VERSION = 3;
+  const SAVE_VERSION = 4;
   const SAVE_KEY = "pixelMine.save";
   const CORRUPT_SAVE_KEY = "pixelMine.corruptSave";
   const TAB_LEASE_KEY = "pixelMine.activeTab";
@@ -21,6 +21,36 @@
   const TOAST_DURATION_MS = 3_600;
   const BACKGROUND_MUSIC_VOLUME = 0.22;
   const ORE_MILESTONE_UPGRADE_ID = "ore_milestone";
+  const CHARACTER_CELL_SIZE = 418;
+  const CHARACTER_CANVAS_WIDTH = 360;
+  const CHARACTER_HORIZONTAL_TRIM = (CHARACTER_CELL_SIZE - CHARACTER_CANVAS_WIDTH) / 2;
+  const MINER_WALK_SPEED = 58;
+  const MINER_STAGE_MARGIN = 16;
+  const MINER_TURN_PAUSE_MS = 420;
+  const MINER_MINE_POSE_MS = 480;
+
+  const CHARACTER_DEFINITIONS = Object.freeze([
+    Object.freeze({ id: "female", name: "여자 광부", shortName: "여자", row: 0 }),
+    Object.freeze({ id: "male", name: "남자 광부", shortName: "남자", row: 1 }),
+    Object.freeze({ id: "dwarf", name: "드워프 광부", shortName: "드워프", row: 2 }),
+  ]);
+
+  const CHARACTER_OUTFITS = Object.freeze([
+    Object.freeze({ id: "workwear", name: "기본 광부복", shortName: "기본", src: "assets/pixel-miner-character-sheet-transparent.png" }),
+    Object.freeze({ id: "casual", name: "캐주얼", shortName: "캐주얼", src: "assets/pixel-miner-casual-character-sheet.png" }),
+    Object.freeze({ id: "space", name: "우주복", shortName: "우주복", src: "assets/pixel-miner-space-character-sheet.png" }),
+  ]);
+
+  const CHARACTER_POSES = Object.freeze({
+    front: Object.freeze({ id: "front", name: "앞모습", column: 0, sourceOffsetX: CHARACTER_HORIZONTAL_TRIM }),
+    side: Object.freeze({ id: "side", name: "옆모습", column: 1, sourceOffsetX: CHARACTER_HORIZONTAL_TRIM }),
+    mining: Object.freeze({ id: "mining", name: "곡괭이를 든 모습", column: 2, sourceOffsetX: -CHARACTER_HORIZONTAL_TRIM }),
+  });
+
+  const DEFAULT_COSMETICS = Object.freeze({
+    characterId: CHARACTER_DEFINITIONS[0].id,
+    outfitId: CHARACTER_OUTFITS[0].id,
+  });
 
   const ORE_DEFINITIONS = Object.freeze([
     {
@@ -361,6 +391,21 @@
         },
       };
     },
+    3: (payload) => {
+      if (!isPlainObject(payload.data)) throw new SaveValidationError("v3 data 객체가 없습니다.");
+      const cosmetics = isPlainObject(payload.data.cosmetics)
+        ? payload.data.cosmetics
+        : { ...DEFAULT_COSMETICS };
+
+      return {
+        version: 4,
+        meta: isPlainObject(payload.meta) ? payload.meta : { app: "PIXEL_MINE", label: "픽셀 광산" },
+        data: {
+          ...payload.data,
+          cosmetics,
+        },
+      };
+    },
   });
 
   class SaveValidationError extends Error {}
@@ -372,6 +417,18 @@
   const achievementElements = new Map();
   const mineralElements = new Map();
   const toastEntries = new Map();
+  const characterImageCache = new Map();
+  const characterRenderTokens = new WeakMap();
+  const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const minerActorState = {
+    x: MINER_STAGE_MARGIN,
+    direction: 1,
+    facingLeft: false,
+    poseId: "side",
+    miningUntil: 0,
+    idleUntil: 0,
+    lastFrameAt: 0,
+  };
   const storageState = {
     available: false,
     readError: null,
@@ -393,6 +450,8 @@
   let autosaveTimer = null;
   let mutationSaveTimer = null;
   let tabHeartbeatTimer = null;
+  let minerAnimationFrameId = null;
+  let minerPoseResetTimer = null;
   let lastRenderAt = 0;
   let purchaseMode = "one";
 
@@ -440,6 +499,8 @@
       "mineStage",
       "mineShaftEyebrow",
       "currentOreBadge",
+      "characterMenuButton",
+      "characterMenuLabel",
       "progressionOreName",
       "progressionClickMultiplier",
       "progressionAutoMultiplier",
@@ -447,9 +508,16 @@
       "currentOreStageLabel",
       "currentOreName",
       "mineButton",
-      "mineButtonLabel",
       "mineGainLabel",
       "oreCanvas",
+      "minerActor",
+      "minerCanvas",
+      "characterDialog",
+      "characterDialogCanvas",
+      "gameCharacterSelect",
+      "gameOutfitSelect",
+      "characterDialogStatus",
+      "applyCharacterButton",
       "upgradeList",
       "mineralCatalogList",
       "mineralCatalogCount",
@@ -502,6 +570,10 @@
     dom.confirmStartButton.addEventListener("click", handleStart);
     dom.startImportButton.addEventListener("click", () => openImportDialog("start"));
     dom.mineButton.addEventListener("click", handleMineClick);
+    dom.characterMenuButton.addEventListener("click", openCharacterDialog);
+    dom.gameCharacterSelect.addEventListener("change", renderCharacterDialogPreview);
+    dom.gameOutfitSelect.addEventListener("change", renderCharacterDialogPreview);
+    dom.applyCharacterButton.addEventListener("click", applyCharacterSelection);
     dom.purchaseModeButtons.forEach((button) => {
       button.addEventListener("click", () => setPurchaseMode(button.dataset.purchaseMode));
     });
@@ -557,6 +629,12 @@
     window.addEventListener("pageshow", handlePageShow);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("storage", handleStorageEvent);
+    window.addEventListener("resize", handleMinerStageResize);
+    if (typeof reducedMotionMedia.addEventListener === "function") {
+      reducedMotionMedia.addEventListener("change", syncMinerMotionSetting);
+    } else if (typeof reducedMotionMedia.addListener === "function") {
+      reducedMotionMedia.addListener(syncMinerMotionSetting);
+    }
   }
 
   function prepareProtocolGate() {
@@ -632,6 +710,7 @@
     dom.startOverlay.classList.add("is-hidden");
     dom.gameApp.classList.remove("is-hidden");
     dom.gameApp.setAttribute("aria-hidden", "false");
+    resetMinerActorMotion();
 
     if (!storageState.available) {
       setSessionWarning("로컬 저장소를 사용할 수 없어 현재 진행은 메모리에만 유지됩니다. 탭을 닫으면 사라질 수 있습니다.");
@@ -661,6 +740,7 @@
       totalClicks: 0,
       upgrades: Object.fromEntries(UPGRADE_DEFINITIONS.map((upgrade) => [upgrade.id, 0])),
       selectedOreId: ORE_DEFINITIONS[0].id,
+      cosmetics: { ...DEFAULT_COSMETICS },
       unlockedAchievements: {},
       stats: {
         playTimeMs: 0,
@@ -696,6 +776,10 @@
       totalClicks: data.totalClicks,
       upgrades: Object.fromEntries(UPGRADE_DEFINITIONS.map((upgrade) => [upgrade.id, data.upgrades[upgrade.id]])),
       selectedOreId: data.selectedOreId,
+      cosmetics: {
+        characterId: data.cosmetics.characterId,
+        outfitId: data.cosmetics.outfitId,
+      },
       unlockedAchievements: { ...data.unlockedAchievements },
       stats: {
         playTimeMs: data.stats.playTimeMs,
@@ -783,6 +867,7 @@
     if (!isPlainObject(input.unlockedAchievements)) throw new SaveValidationError("업적 객체가 없습니다.");
     if (!isPlainObject(input.stats)) throw new SaveValidationError("stats 객체가 없습니다.");
     if (!isPlainObject(input.settings)) throw new SaveValidationError("settings 객체가 없습니다.");
+    if (!isPlainObject(input.cosmetics)) throw new SaveValidationError("cosmetics 객체가 없습니다.");
 
     const upgrades = {};
     for (const definition of UPGRADE_DEFINITIONS) {
@@ -820,12 +905,22 @@
       throw new SaveValidationError("모션 감소 설정이 올바르지 않습니다.");
     }
 
+    const characterId = input.cosmetics.characterId;
+    const outfitId = input.cosmetics.outfitId;
+    if (!CHARACTER_DEFINITIONS.some((character) => character.id === characterId)) {
+      throw new SaveValidationError("선택 캐릭터 ID가 올바르지 않습니다.");
+    }
+    if (!CHARACTER_OUTFITS.some((outfit) => outfit.id === outfitId)) {
+      throw new SaveValidationError("선택 복장 ID가 올바르지 않습니다.");
+    }
+
     return {
       currency: validatedNumber(input.currency, "보유 광석"),
       totalCurrencyEarned: validatedNumber(input.totalCurrencyEarned, "누적 광석"),
       totalClicks: validatedNumber(input.totalClicks, "총 클릭", MAX_SAFE_VALUE, true),
       upgrades,
       selectedOreId,
+      cosmetics: { characterId, outfitId },
       unlockedAchievements: achievements,
       stats: {
         playTimeMs: validatedNumber(input.stats.playTimeMs, "플레이 시간"),
@@ -1038,6 +1133,9 @@
     if (sessionBlocked) return;
     sessionBlocked = true;
     sessionStarted = false;
+    stopMinerActorMotion();
+    window.clearTimeout(minerPoseResetTimer);
+    minerPoseResetTimer = null;
     stopSessionTimers();
     pauseBackgroundMusic("일시 정지 · 다른 탭에서 실행 중입니다.");
     dom.gameApp.classList.add("is-hidden");
@@ -1211,6 +1309,7 @@
   function handleMineClick() {
     if (!sessionStarted || sessionBlocked || !state) return;
     advanceDataTo(state, Date.now(), false);
+    triggerMinerMiningPose();
 
     const gain = calculateClickPower();
     state.currency = safeAdd(state.currency, gain);
@@ -1425,7 +1524,6 @@
     );
     dom.currentOreStageLabel.textContent = `STAGE ${stageNumber}`;
     dom.currentOreName.textContent = ore.name;
-    dom.mineButtonLabel.textContent = `${ore.name} 채굴`;
     dom.mineButton.setAttribute("aria-label", `${ore.name} 광맥을 채굴해 광석 획득`);
     dom.mineStage.setAttribute(
       "aria-label",
@@ -1506,6 +1604,311 @@
     renderMineralCatalog();
     renderAchievements();
     renderSaveDetails();
+    renderCharacterState();
+  }
+
+  function getCharacterDefinition(id) {
+    return CHARACTER_DEFINITIONS.find((character) => character.id === id) ?? CHARACTER_DEFINITIONS[0];
+  }
+
+  function getCharacterOutfit(id) {
+    return CHARACTER_OUTFITS.find((outfit) => outfit.id === id) ?? CHARACTER_OUTFITS[0];
+  }
+
+  function getCharacterImage(outfitId) {
+    if (characterImageCache.has(outfitId)) return characterImageCache.get(outfitId);
+
+    const outfit = getCharacterOutfit(outfitId);
+    const imagePromise = new Promise((resolve, reject) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.addEventListener("load", () => {
+        const sheetSize = CHARACTER_CELL_SIZE * 3;
+        if (image.naturalWidth !== sheetSize || image.naturalHeight !== sheetSize) {
+          reject(new Error(`${outfit.name} 캐릭터 시트 크기가 ${sheetSize}×${sheetSize}px이 아닙니다.`));
+          return;
+        }
+        resolve(image);
+      }, { once: true });
+      image.addEventListener("error", () => {
+        reject(new Error(`${outfit.name} 캐릭터 시트를 불러오지 못했습니다.`));
+      }, { once: true });
+      image.src = outfit.src;
+    });
+
+    characterImageCache.set(outfitId, imagePromise);
+    return imagePromise;
+  }
+
+  async function drawCharacterSprite(canvas, cosmetics, poseId = "front", facingLeft = false) {
+    if (!(canvas instanceof HTMLCanvasElement)) return false;
+    const character = getCharacterDefinition(cosmetics.characterId);
+    const outfit = getCharacterOutfit(cosmetics.outfitId);
+    const pose = CHARACTER_POSES[poseId] ?? CHARACTER_POSES.front;
+    const requestId = (characterRenderTokens.get(canvas) ?? 0) + 1;
+    characterRenderTokens.set(canvas, requestId);
+
+    try {
+      const image = await getCharacterImage(outfit.id);
+      if (characterRenderTokens.get(canvas) !== requestId) return null;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas 2D를 사용할 수 없습니다.");
+
+      canvas.width = CHARACTER_CANVAS_WIDTH;
+      canvas.height = CHARACTER_CELL_SIZE;
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.imageSmoothingEnabled = false;
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.save();
+      if (facingLeft) {
+        context.translate(canvas.width, 0);
+        context.scale(-1, 1);
+      }
+      context.drawImage(
+        image,
+        pose.column * CHARACTER_CELL_SIZE + pose.sourceOffsetX,
+        character.row * CHARACTER_CELL_SIZE,
+        CHARACTER_CANVAS_WIDTH,
+        CHARACTER_CELL_SIZE,
+        0,
+        0,
+        CHARACTER_CANVAS_WIDTH,
+        CHARACTER_CELL_SIZE,
+      );
+      context.restore();
+
+      canvas.dataset.character = character.id;
+      canvas.dataset.outfit = outfit.id;
+      canvas.dataset.pose = pose.id;
+      canvas.dataset.facing = facingLeft ? "left" : "right";
+      delete canvas.dataset.renderError;
+      canvas.setAttribute("aria-label", `${outfit.name} ${character.name} ${pose.name}${facingLeft ? ", 왼쪽 방향" : ", 오른쪽 방향"}`);
+      return true;
+    } catch (error) {
+      if (characterRenderTokens.get(canvas) !== requestId) return null;
+      console.error(error);
+      canvas.dataset.renderError = "true";
+      return false;
+    }
+  }
+
+  function renderCharacterState() {
+    if (!state) return;
+    const character = getCharacterDefinition(state.cosmetics.characterId);
+    const outfit = getCharacterOutfit(state.cosmetics.outfitId);
+    dom.characterMenuLabel.textContent = `${character.shortName} · ${outfit.shortName}`;
+    dom.characterMenuButton.setAttribute("aria-label", `광부 선택 열기, ${character.name}와 ${outfit.name} 적용 중`);
+    dom.characterMenuButton.title = `${character.name} · ${outfit.name}`;
+    dom.minerActor.dataset.character = character.id;
+    dom.minerActor.dataset.outfit = outfit.id;
+    renderMinerActorPose(true);
+  }
+
+  function openCharacterDialog() {
+    if (!state || sessionBlocked) return;
+    dom.gameCharacterSelect.value = state.cosmetics.characterId;
+    dom.gameOutfitSelect.value = state.cosmetics.outfitId;
+    setDialogStatus(dom.characterDialogStatus, "선택한 광부를 미리 보는 중입니다.", false);
+    void renderCharacterDialogPreview();
+    openDialog(dom.characterDialog);
+  }
+
+  async function renderCharacterDialogPreview() {
+    const cosmetics = {
+      characterId: dom.gameCharacterSelect.value,
+      outfitId: dom.gameOutfitSelect.value,
+    };
+    const character = getCharacterDefinition(cosmetics.characterId);
+    const outfit = getCharacterOutfit(cosmetics.outfitId);
+    dom.characterDialogStatus.textContent = `${outfit.name} ${character.name} 이미지를 불러오는 중입니다.`;
+    dom.characterDialogStatus.className = "dialog-status";
+    const rendered = await drawCharacterSprite(dom.characterDialogCanvas, cosmetics, "front", false);
+    if (rendered === null) return;
+    setDialogStatus(
+      dom.characterDialogStatus,
+      rendered ? `${outfit.name} · ${character.name} 미리보기` : "캐릭터 이미지를 불러오지 못했습니다.",
+      !rendered,
+    );
+  }
+
+  function applyCharacterSelection() {
+    if (!state || sessionBlocked) return;
+    const character = getCharacterDefinition(dom.gameCharacterSelect.value);
+    const outfit = getCharacterOutfit(dom.gameOutfitSelect.value);
+    state.cosmetics = { characterId: character.id, outfitId: outfit.id };
+    renderCharacterState();
+    const saved = saveGame("광부 선택", false);
+    closeDialog(dom.characterDialog);
+    showToast(
+      saved ? `${character.name} · ${outfit.name}을 적용하고 저장했습니다.` : `${character.name} · ${outfit.name}을 적용했지만 로컬 저장에는 실패했습니다.`,
+      { error: !saved, key: saved ? "character:applied" : "character:save-error" },
+    );
+    void refreshStorageEstimate();
+  }
+
+  function shouldReduceMinerMotion() {
+    return Boolean(state?.settings.reducedMotion || reducedMotionMedia.matches);
+  }
+
+  function getMinerActorMaxX() {
+    if (!dom.mineStage || !dom.minerActor) return MINER_STAGE_MARGIN;
+    const stageWidth = dom.mineStage.clientWidth;
+    const actorWidth = dom.minerActor.getBoundingClientRect().width;
+    return Math.max(MINER_STAGE_MARGIN, stageWidth - actorWidth - MINER_STAGE_MARGIN);
+  }
+
+  function positionMinerActor() {
+    const maxX = getMinerActorMaxX();
+    minerActorState.x = Math.min(maxX, Math.max(MINER_STAGE_MARGIN, minerActorState.x));
+    dom.minerActor.style.transform = `translate3d(${minerActorState.x.toFixed(2)}px, 0, 0)`;
+    dom.minerActor.dataset.x = minerActorState.x.toFixed(2);
+  }
+
+  function renderMinerActorPose(force = false) {
+    if (!state || !dom.minerActor) return;
+    const nextPose = CHARACTER_POSES[minerActorState.poseId] ? minerActorState.poseId : "front";
+    const nextFacing = minerActorState.facingLeft ? "left" : "right";
+    const changed =
+      dom.minerActor.dataset.pose !== nextPose ||
+      dom.minerActor.dataset.facing !== nextFacing ||
+      dom.minerActor.dataset.character !== state.cosmetics.characterId ||
+      dom.minerActor.dataset.outfit !== state.cosmetics.outfitId;
+
+    dom.minerActor.dataset.pose = nextPose;
+    dom.minerActor.dataset.facing = nextFacing;
+    dom.minerActor.dataset.moving = String(nextPose === "side" && !shouldReduceMinerMotion());
+    if (!force && !changed) return;
+
+    void drawCharacterSprite(
+      dom.minerCanvas,
+      state.cosmetics,
+      nextPose,
+      minerActorState.facingLeft,
+    ).then((rendered) => {
+      if (rendered === true) dom.minerActor.dataset.ready = "true";
+      else if (rendered === false) dom.minerActor.dataset.ready = "error";
+    });
+  }
+
+  function resetMinerActorMotion() {
+    stopMinerActorMotion();
+    window.clearTimeout(minerPoseResetTimer);
+    minerPoseResetTimer = null;
+    minerActorState.x = MINER_STAGE_MARGIN;
+    minerActorState.direction = 1;
+    minerActorState.facingLeft = false;
+    minerActorState.poseId = shouldReduceMinerMotion() ? "front" : "side";
+    minerActorState.miningUntil = 0;
+    minerActorState.idleUntil = 0;
+    minerActorState.lastFrameAt = 0;
+    positionMinerActor();
+    renderMinerActorPose(true);
+    startMinerActorMotion();
+  }
+
+  function startMinerActorMotion() {
+    if (
+      minerAnimationFrameId !== null ||
+      !sessionStarted ||
+      sessionBlocked ||
+      !state ||
+      document.hidden ||
+      dom.gameApp.classList.contains("is-hidden") ||
+      shouldReduceMinerMotion()
+    ) return;
+    minerActorState.lastFrameAt = performance.now();
+    minerAnimationFrameId = window.requestAnimationFrame(animateMinerActor);
+  }
+
+  function stopMinerActorMotion() {
+    if (minerAnimationFrameId !== null) window.cancelAnimationFrame(minerAnimationFrameId);
+    minerAnimationFrameId = null;
+    minerActorState.lastFrameAt = 0;
+  }
+
+  function animateMinerActor(timestamp) {
+    minerAnimationFrameId = null;
+    if (!sessionStarted || sessionBlocked || !state || document.hidden || shouldReduceMinerMotion()) return;
+
+    const elapsedSeconds = Math.min(0.05, Math.max(0, (timestamp - minerActorState.lastFrameAt) / 1_000));
+    minerActorState.lastFrameAt = timestamp;
+    const previousPose = minerActorState.poseId;
+    const previousFacing = minerActorState.facingLeft;
+
+    if (timestamp < minerActorState.miningUntil) {
+      minerActorState.poseId = "mining";
+    } else if (timestamp < minerActorState.idleUntil) {
+      minerActorState.poseId = "front";
+    } else {
+      minerActorState.poseId = "side";
+      minerActorState.facingLeft = minerActorState.direction < 0;
+      minerActorState.x += minerActorState.direction * MINER_WALK_SPEED * elapsedSeconds;
+      const maxX = getMinerActorMaxX();
+
+      if (minerActorState.x >= maxX) {
+        minerActorState.x = maxX;
+        minerActorState.direction = -1;
+        minerActorState.facingLeft = true;
+        minerActorState.poseId = "front";
+        minerActorState.idleUntil = timestamp + MINER_TURN_PAUSE_MS;
+      } else if (minerActorState.x <= MINER_STAGE_MARGIN) {
+        minerActorState.x = MINER_STAGE_MARGIN;
+        minerActorState.direction = 1;
+        minerActorState.facingLeft = false;
+        minerActorState.poseId = "front";
+        minerActorState.idleUntil = timestamp + MINER_TURN_PAUSE_MS;
+      }
+    }
+
+    positionMinerActor();
+    if (previousPose !== minerActorState.poseId || previousFacing !== minerActorState.facingLeft) {
+      renderMinerActorPose();
+    }
+    minerAnimationFrameId = window.requestAnimationFrame(animateMinerActor);
+  }
+
+  function triggerMinerMiningPose() {
+    if (!state || !dom.minerActor) return;
+    const now = performance.now();
+    const actorCenter = minerActorState.x + dom.minerActor.getBoundingClientRect().width / 2;
+    minerActorState.facingLeft = actorCenter > dom.mineStage.clientWidth / 2;
+    minerActorState.poseId = "mining";
+    minerActorState.miningUntil = now + MINER_MINE_POSE_MS;
+    minerActorState.idleUntil = 0;
+    renderMinerActorPose(true);
+
+    window.clearTimeout(minerPoseResetTimer);
+    minerPoseResetTimer = window.setTimeout(() => {
+      minerPoseResetTimer = null;
+      if (!state || !shouldReduceMinerMotion()) return;
+      minerActorState.poseId = "front";
+      renderMinerActorPose(true);
+    }, MINER_MINE_POSE_MS);
+    startMinerActorMotion();
+  }
+
+  function handleMinerStageResize() {
+    if (!state || !sessionStarted) return;
+    positionMinerActor();
+  }
+
+  function syncMinerMotionSetting() {
+    if (!state || !dom.minerActor || !sessionStarted) return;
+    if (shouldReduceMinerMotion()) {
+      stopMinerActorMotion();
+      minerActorState.x = MINER_STAGE_MARGIN;
+      minerActorState.poseId = "front";
+      minerActorState.miningUntil = 0;
+      minerActorState.idleUntil = 0;
+      positionMinerActor();
+      renderMinerActorPose(true);
+      return;
+    }
+
+    minerActorState.poseId = "side";
+    minerActorState.idleUntil = 0;
+    renderMinerActorPose(true);
+    startMinerActorMotion();
   }
 
   function renderGameValues() {
@@ -2004,11 +2407,13 @@
     if (!state) return;
     dom.reducedMotionToggle.checked = state.settings.reducedMotion;
     document.body.classList.toggle("reduce-motion", state.settings.reducedMotion);
+    syncMinerMotionSetting();
   }
 
   function handleVisibilityChange() {
     if (!sessionStarted || sessionBlocked) return;
     if (document.hidden) {
+      stopMinerActorMotion();
       saveGame("백그라운드 저장");
       pauseBackgroundMusic("일시 정지 · 탭으로 돌아오면 재생합니다.");
     } else {
@@ -2017,12 +2422,14 @@
       renderAll();
       refreshTabLease();
       applyMusicSetting({ attemptPlayback: true });
+      startMinerActorMotion();
     }
   }
 
   function handlePageHide() {
     if (!sessionStarted || sessionBlocked) return;
     pageIsHiding = true;
+    stopMinerActorMotion();
     saveGame("페이지 종료 저장");
     pauseBackgroundMusic("일시 정지 · 페이지를 다시 열면 재생합니다.");
     releaseTabLease();
@@ -2041,10 +2448,12 @@
     advanceDataTo(state, Date.now(), false);
     renderAll();
     applyMusicSetting({ attemptPlayback: true });
+    startMinerActorMotion();
   }
 
   function handleBeforeUnload() {
     if (!sessionStarted || sessionBlocked) return;
+    stopMinerActorMotion();
     if (!pageIsHiding) saveGame("종료 직전 저장");
     pauseBackgroundMusic();
     releaseTabLease();

@@ -51,7 +51,8 @@ body::before {
 
 button,
 textarea,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -61,7 +62,8 @@ button {
 
 button:focus-visible,
 textarea:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 4px solid var(--gold);
   outline-offset: 4px;
 }
@@ -377,6 +379,7 @@ input:focus-visible {
   z-index: 10;
   display: grid;
   align-items: center;
+  grid-template-areas: "stats actions";
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   margin-bottom: 18px;
@@ -384,6 +387,7 @@ input:focus-visible {
 }
 
 .topbar-stats {
+  grid-area: stats;
   display: grid;
   min-width: 0;
   align-items: stretch;
@@ -415,6 +419,7 @@ input:focus-visible {
 }
 
 .topbar-actions {
+  grid-area: actions;
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
@@ -649,8 +654,53 @@ input:focus-visible {
   font-size: clamp(1.15rem, 3vw, 1.5rem);
 }
 
+.mine-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.character-menu-button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  color: var(--paper);
+  background: var(--slate);
+  box-shadow: 3px 3px 0 var(--ink);
+  font-size: 0.7rem;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.character-menu-button:hover {
+  color: var(--ink);
+  background: var(--gold);
+}
+
+.character-menu-button:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.character-menu-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 2;
+}
+
 .mine-stage {
   position: relative;
+  isolation: isolate;
   display: grid;
   min-height: 410px;
   overflow: hidden;
@@ -663,6 +713,7 @@ input:focus-visible {
 .mine-stage::before,
 .mine-stage::after {
   position: absolute;
+  z-index: 0;
   bottom: 0;
   width: 40%;
   height: 38px;
@@ -697,6 +748,7 @@ input:focus-visible {
 }
 
 .cave-dots {
+  z-index: 0;
   top: 18%;
   left: 10%;
   opacity: 0.72;
@@ -716,7 +768,7 @@ input:focus-visible {
 
 .ore-stage-marker {
   position: absolute;
-  z-index: 3;
+  z-index: 4;
   top: 18px;
   left: 18px;
   display: grid;
@@ -728,6 +780,34 @@ input:focus-visible {
   background: var(--mine-secondary);
   box-shadow: 4px 4px 0 var(--ink);
   pointer-events: none;
+}
+
+.miner-actor {
+  position: absolute;
+  z-index: 2;
+  bottom: 24px;
+  left: 0;
+  width: clamp(90px, 13vw, 118px);
+  aspect-ratio: 360 / 418;
+  pointer-events: none;
+  transform: translate3d(16px, 0, 0);
+  will-change: transform;
+}
+
+.miner-actor canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(4px 6px 0 rgba(23, 32, 42, 0.82));
+}
+
+.miner-actor[data-pose="front"] canvas {
+  filter: drop-shadow(3px 5px 0 rgba(23, 32, 42, 0.76));
+}
+
+.miner-actor[data-pose="mining"] canvas {
+  filter: drop-shadow(6px 7px 0 rgba(23, 32, 42, 0.9)) brightness(1.06);
 }
 
 .ore-stage-marker span {
@@ -744,7 +824,6 @@ input:focus-visible {
 
 .mine-button {
   position: relative;
-  z-index: 2;
   display: grid;
   width: min(290px, 82%);
   padding: 18px 16px 14px;
@@ -757,6 +836,8 @@ input:focus-visible {
 }
 
 .mine-button canvas {
+  position: relative;
+  z-index: 1;
   display: block;
   width: min(240px, 100%);
   height: auto;
@@ -775,16 +856,9 @@ input:focus-visible {
   filter: drop-shadow(3px 4px 0 rgba(23, 32, 42, 0.9)) brightness(1.18);
 }
 
-.mine-button-label {
-  margin-top: 14px;
-  padding: 8px 12px;
-  border: 3px solid var(--paper);
-  background: var(--ink);
-  box-shadow: 4px 4px 0 var(--mine-accent);
-  font-weight: 900;
-}
-
 .mine-button-gain {
+  position: relative;
+  z-index: 4;
   margin-top: 10px;
   color: var(--mine-accent);
   font-family: var(--font-pixel);
@@ -1422,6 +1496,109 @@ input:focus-visible {
   padding: clamp(20px, 5vw, 34px);
 }
 
+.character-dialog-content {
+  position: relative;
+}
+
+.character-dialog-content h2 {
+  padding-right: 52px;
+}
+
+.character-dialog-description {
+  max-width: 600px;
+  color: var(--slate);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.character-customizer {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.78fr) minmax(250px, 1fr);
+  gap: 24px;
+  align-items: center;
+  margin: 22px 0;
+}
+
+.character-dialog-preview {
+  display: grid;
+  min-height: 300px;
+  overflow: hidden;
+  place-items: center;
+  padding: 14px;
+  border: 4px solid var(--ink);
+  background-color: #d7cba9;
+  background-image:
+    linear-gradient(45deg, #b9ad8d 25%, transparent 25%),
+    linear-gradient(-45deg, #b9ad8d 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #b9ad8d 75%),
+    linear-gradient(-45deg, transparent 75%, #b9ad8d 75%);
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  background-size: 24px 24px;
+  box-shadow: inset 0 0 0 7px rgba(23, 32, 42, 0.16);
+}
+
+.character-dialog-preview canvas {
+  display: block;
+  width: min(100%, 230px);
+  height: auto;
+  aspect-ratio: 360 / 418;
+  image-rendering: pixelated;
+  filter: drop-shadow(5px 7px 0 rgba(23, 32, 42, 0.72));
+}
+
+.character-selector-controls {
+  display: grid;
+  gap: 16px;
+}
+
+.character-selector-control {
+  display: grid;
+  gap: 7px;
+}
+
+.character-selector-control > span {
+  color: var(--slate);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.character-selector-control select {
+  width: 100%;
+  min-height: 48px;
+  padding: 9px 38px 9px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+    linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-repeat: no-repeat;
+  background-size: 7px 7px, 7px 7px;
+  box-shadow: 4px 4px 0 var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+  appearance: none;
+}
+
+.character-behavior-note {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-left: 5px solid var(--gold);
+  color: var(--slate);
+  background: rgba(214, 180, 90, 0.2);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.character-behavior-note strong {
+  color: var(--ink);
+}
+
 .feature-dialog-content {
   position: relative;
 }
@@ -1630,58 +1807,110 @@ body.reduce-motion *::after {
 
   .game-shell {
     width: min(100% - 20px, 1180px);
-    padding-top: 14px;
+    padding-top: 10px;
   }
 
   .topbar {
     align-items: stretch;
+    grid-template-areas:
+      "actions"
+      "stats";
     grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 14px;
-    padding: 10px 12px;
+    gap: 6px;
+    margin-bottom: 10px;
+    padding: 7px 8px;
   }
 
   .topbar-stat {
-    padding: 2px 8px;
+    padding: 0 6px;
   }
 
   .topbar-stat .stat-label {
-    font-size: 0.68rem;
+    margin-bottom: 0;
+    font-size: 0.62rem;
     white-space: nowrap;
   }
 
   .topbar-stat .stat-value {
-    font-size: clamp(0.9rem, 5vw, 1.1rem);
+    font-size: clamp(0.82rem, 4.5vw, 1rem);
+    line-height: 1.25;
   }
 
   .topbar-actions {
     width: 100%;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
   }
 
   .save-indicator {
     min-width: 0;
     flex: 1 1 auto;
-    font-size: 0.72rem;
+    font-size: 0.66rem;
+    line-height: 1.3;
     text-align: left;
+  }
+
+  .save-indicator::before {
+    width: 8px;
+    height: 8px;
+    margin-right: 5px;
   }
 
   .utility-menu {
     flex: 0 0 auto;
+    gap: 5px;
+  }
+
+  .utility-menu-button {
+    width: 38px;
+    height: 38px;
+    padding: 6px;
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+
+  .utility-menu-badge {
+    top: -6px;
+    right: -5px;
+    min-width: 20px;
+    height: 20px;
+  }
+
+  .utility-menu-badge--fraction {
+    right: -8px;
+    min-width: 28px;
   }
 
   .utility-menu-button::after {
     display: none;
   }
 
-  .mine-section,
-  .shop-section {
+  .mine-section {
     padding: 14px;
+  }
+
+  .shop-section {
+    padding: 12px;
+  }
+
+  .mine-heading-actions {
+    align-items: flex-end;
+    flex-direction: column-reverse;
+    gap: 5px;
+  }
+
+  .character-menu-button {
+    min-height: 34px;
+    padding: 5px 7px;
+    font-size: 0.66rem;
   }
 
   .mine-stage {
     min-height: 340px;
+  }
+
+  .miner-actor {
+    bottom: 22px;
+    width: clamp(78px, 25vw, 96px);
   }
 
   .ore-progression-bonus {
@@ -1699,25 +1928,82 @@ body.reduce-motion *::after {
   .purchase-toolbar {
     align-items: stretch;
     flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 8px 10px;
   }
 
   .purchase-mode-buttons {
     width: 100%;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .purchase-mode-button {
+    min-height: 34px;
+    padding: 5px 6px;
+  }
+
+  .upgrade-list {
+    gap: 8px;
   }
 
   .upgrade-card {
-    grid-template-columns: 38px minmax(0, 1fr);
+    grid-template-columns: 34px minmax(0, 1fr) clamp(82px, 25vw, 92px);
+    gap: 8px;
+    padding: 8px;
   }
 
   .upgrade-icon {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
+    font-size: 0.62rem;
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+
+  .upgrade-name-row {
+    gap: 5px;
+  }
+
+  .upgrade-name {
+    font-size: 0.9rem;
+    line-height: 1.35;
+  }
+
+  .upgrade-level {
+    font-size: 0.48rem;
+  }
+
+  .upgrade-description {
+    overflow: hidden;
+    font-size: 0.68rem;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .upgrade-effect {
+    font-size: 0.68rem;
+    line-height: 1.35;
+    white-space: nowrap;
   }
 
   .upgrade-buy {
-    grid-column: 1 / -1;
+    grid-column: auto;
+    align-self: stretch;
     width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 5px 6px;
+    font-size: 0.7rem;
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+
+  .upgrade-buy-cost {
+    overflow: hidden;
+    font-size: 0.46rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .achievement-grid,
@@ -1725,6 +2011,19 @@ body.reduce-motion *::after {
   .storage-details,
   .save-actions {
     grid-template-columns: 1fr;
+  }
+
+  .character-customizer {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .character-dialog-preview {
+    min-height: 250px;
+  }
+
+  .character-dialog-preview canvas {
+    width: min(100%, 190px);
   }
 
   .achievement-card {
