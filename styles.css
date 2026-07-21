@@ -1511,6 +1511,14 @@ select:focus-visible {
   font-weight: 800;
 }
 
+#characterDialog[data-mode="onboarding"] [data-close-dialog="characterDialog"] {
+  display: none;
+}
+
+#characterDialog[data-mode="onboarding"] .outfit-shop {
+  display: none;
+}
+
 .character-customizer {
   display: grid;
   grid-template-columns: minmax(220px, 0.78fr) minmax(250px, 1fr);
@@ -1582,6 +1590,133 @@ select:focus-visible {
   font-weight: 900;
   cursor: pointer;
   appearance: none;
+}
+
+.character-selector-control select:disabled {
+  color: var(--slate);
+  background-color: #ded3b5;
+  background-image: none;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.character-outfit-note {
+  color: var(--slate);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.outfit-shop {
+  margin: 24px 0 18px;
+  padding-top: 20px;
+  border-top: 4px solid var(--ink);
+}
+
+.outfit-shop-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.outfit-shop-heading h3,
+.outfit-shop-heading p {
+  margin: 0;
+}
+
+.outfit-shop-heading > p {
+  max-width: 390px;
+  color: var(--slate);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.outfit-shop-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.outfit-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 9px;
+  padding: 10px;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  box-shadow: 4px 4px 0 var(--slate);
+}
+
+.outfit-card.is-current {
+  box-shadow: 4px 4px 0 var(--gold);
+}
+
+.outfit-card.is-previewing {
+  border-color: var(--ore);
+}
+
+.outfit-card.is-locked {
+  background: #ded3b5;
+}
+
+.outfit-card-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 3px solid var(--ink);
+  color: var(--cream);
+  background: var(--slate);
+  box-shadow: 2px 2px 0 var(--ink);
+  font-family: var(--font-pixel);
+  font-size: 0.62rem;
+}
+
+.outfit-card-info {
+  min-width: 0;
+}
+
+.outfit-card-info h4,
+.outfit-card-info p {
+  margin: 0;
+}
+
+.outfit-card-info h4 {
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.outfit-card-info p {
+  margin-top: 3px;
+  color: var(--slate);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.outfit-card-status {
+  display: block;
+  margin-top: 5px;
+  color: var(--ore);
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+
+.outfit-buy-button {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 2px;
+  min-height: 48px;
+  margin-top: 2px;
+}
+
+.outfit-buy-cost {
+  font-family: var(--font-pixel);
+  font-size: 0.48rem;
+  line-height: 1.5;
 }
 
 .character-behavior-note {
@@ -2016,6 +2151,41 @@ body.reduce-motion *::after {
   .character-customizer {
     grid-template-columns: 1fr;
     gap: 18px;
+  }
+
+  .outfit-shop-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .outfit-shop-heading > p {
+    text-align: left;
+  }
+
+  .outfit-shop-list {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .outfit-card {
+    grid-template-columns: 34px minmax(0, 1fr) minmax(88px, 96px);
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .outfit-card-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .outfit-buy-button {
+    grid-column: auto;
+    grid-row: 1;
+    align-self: stretch;
+    min-height: 48px;
+    margin-top: 0;
+    padding: 5px 6px;
   }
 
   .character-dialog-preview {

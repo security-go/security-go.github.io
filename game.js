@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const SAVE_VERSION = 4;
+  const SAVE_VERSION = 6;
   const SAVE_KEY = "pixelMine.save";
   const CORRUPT_SAVE_KEY = "pixelMine.corruptSave";
   const TAB_LEASE_KEY = "pixelMine.activeTab";
@@ -36,9 +36,36 @@
   ]);
 
   const CHARACTER_OUTFITS = Object.freeze([
-    Object.freeze({ id: "workwear", name: "기본 광부복", shortName: "기본", src: "assets/pixel-miner-character-sheet-transparent.png" }),
-    Object.freeze({ id: "casual", name: "캐주얼", shortName: "캐주얼", src: "assets/pixel-miner-casual-character-sheet.png" }),
-    Object.freeze({ id: "space", name: "우주복", shortName: "우주복", src: "assets/pixel-miner-space-character-sheet.png" }),
+    Object.freeze({
+      id: "workwear",
+      icon: "W",
+      name: "기본 광부복",
+      shortName: "기본",
+      description: "광산 생활을 시작할 때 지급되는 튼튼한 작업복입니다.",
+      price: 0,
+      unlockOreLevel: 0,
+      src: "assets/pixel-miner-character-sheet-transparent.png",
+    }),
+    Object.freeze({
+      id: "casual",
+      icon: "C",
+      name: "캐주얼",
+      shortName: "캐주얼",
+      description: "가볍게 입고 채굴하는 일상형 복장입니다.",
+      price: 10_000_000,
+      unlockOreLevel: 2,
+      src: "assets/pixel-miner-casual-character-sheet.png",
+    }),
+    Object.freeze({
+      id: "space",
+      icon: "S",
+      name: "우주복",
+      shortName: "우주복",
+      description: "최심부와 극한 환경을 견디는 미래형 채굴복입니다.",
+      price: 1_200_000_000,
+      unlockOreLevel: 4,
+      src: "assets/pixel-miner-space-character-sheet.png",
+    }),
   ]);
 
   const CHARACTER_POSES = Object.freeze({
@@ -48,8 +75,10 @@
   });
 
   const DEFAULT_COSMETICS = Object.freeze({
-    characterId: CHARACTER_DEFINITIONS[0].id,
+    characterId: "male",
     outfitId: CHARACTER_OUTFITS[0].id,
+    selectionConfirmed: false,
+    ownedOutfitIds: Object.freeze([CHARACTER_OUTFITS[0].id]),
   });
 
   const ORE_DEFINITIONS = Object.freeze([
@@ -163,7 +192,7 @@
       name: "다이아",
       englishName: "DIAMOND",
       description: "청백색 결정면이 별빛처럼 갈라지는 최심부의 희귀 광맥입니다.",
-      unlockCost: 12_500_000_000,
+      unlockCost: 5_700_000_000,
       clickMultiplier: 12,
       autoMultiplier: 15,
       palette: {
@@ -406,6 +435,48 @@
         },
       };
     },
+    4: (payload) => {
+      if (!isPlainObject(payload.data)) throw new SaveValidationError("v4 data 객체가 없습니다.");
+      const legacyCosmetics = isPlainObject(payload.data.cosmetics) ? payload.data.cosmetics : null;
+      const legacyCharacterId = legacyCosmetics?.characterId;
+      const usedLegacyDefault =
+        legacyCharacterId === "female" &&
+        (legacyCosmetics?.outfitId === undefined || legacyCosmetics.outfitId === "workwear");
+      const characterId = usedLegacyDefault
+        ? DEFAULT_COSMETICS.characterId
+        : legacyCharacterId ?? DEFAULT_COSMETICS.characterId;
+
+      return {
+        version: 5,
+        meta: isPlainObject(payload.meta) ? payload.meta : { app: "PIXEL_MINE", label: "픽셀 광산" },
+        data: {
+          ...payload.data,
+          cosmetics: {
+            characterId,
+            outfitId: DEFAULT_COSMETICS.outfitId,
+            selectionConfirmed: true,
+          },
+        },
+      };
+    },
+    5: (payload) => {
+      if (!isPlainObject(payload.data)) throw new SaveValidationError("v5 data 객체가 없습니다.");
+      const cosmetics = isPlainObject(payload.data.cosmetics) ? payload.data.cosmetics : {};
+
+      return {
+        version: 6,
+        meta: isPlainObject(payload.meta) ? payload.meta : { app: "PIXEL_MINE", label: "픽셀 광산" },
+        data: {
+          ...payload.data,
+          cosmetics: {
+            characterId: cosmetics.characterId ?? DEFAULT_COSMETICS.characterId,
+            outfitId: DEFAULT_COSMETICS.outfitId,
+            selectionConfirmed: cosmetics.selectionConfirmed ?? true,
+            ownedOutfitIds: [...DEFAULT_COSMETICS.ownedOutfitIds],
+          },
+        },
+      };
+    },
   });
 
   class SaveValidationError extends Error {}
@@ -416,6 +487,7 @@
   const upgradeElements = new Map();
   const achievementElements = new Map();
   const mineralElements = new Map();
+  const outfitElements = new Map();
   const toastEntries = new Map();
   const characterImageCache = new Map();
   const characterRenderTokens = new WeakMap();
@@ -513,9 +585,14 @@
       "minerActor",
       "minerCanvas",
       "characterDialog",
+      "characterDialogHeading",
+      "characterDialogDescription",
       "characterDialogCanvas",
       "gameCharacterSelect",
+      "gameOutfitControl",
       "gameOutfitSelect",
+      "gameOutfitNote",
+      "outfitShopList",
       "characterDialogStatus",
       "applyCharacterButton",
       "upgradeList",
@@ -570,9 +647,12 @@
     dom.confirmStartButton.addEventListener("click", handleStart);
     dom.startImportButton.addEventListener("click", () => openImportDialog("start"));
     dom.mineButton.addEventListener("click", handleMineClick);
-    dom.characterMenuButton.addEventListener("click", openCharacterDialog);
+    dom.characterMenuButton.addEventListener("click", () => openCharacterDialog());
     dom.gameCharacterSelect.addEventListener("change", renderCharacterDialogPreview);
-    dom.gameOutfitSelect.addEventListener("change", renderCharacterDialogPreview);
+    dom.gameOutfitSelect.addEventListener("change", () => {
+      renderOutfitShop();
+      void renderCharacterDialogPreview();
+    });
     dom.applyCharacterButton.addEventListener("click", applyCharacterSelection);
     dom.purchaseModeButtons.forEach((button) => {
       button.addEventListener("click", () => setPurchaseMode(button.dataset.purchaseMode));
@@ -619,7 +699,10 @@
 
     document.querySelectorAll("dialog").forEach((dialog) => {
       dialog.addEventListener("click", (event) => {
-        if (event.target === dialog) closeDialog(dialog);
+        if (event.target === dialog && !isRequiredCharacterSelection(dialog)) closeDialog(dialog);
+      });
+      dialog.addEventListener("cancel", (event) => {
+        if (isRequiredCharacterSelection(dialog)) event.preventDefault();
       });
       dialog.addEventListener("close", () => syncDialogTrigger(dialog, false));
     });
@@ -703,6 +786,7 @@
     buildUpgradeCards();
     buildMineralCatalogCards();
     buildAchievementCards();
+    buildOutfitCards();
     evaluateAchievements(true);
     renderAll();
 
@@ -730,7 +814,11 @@
 
     dom.confirmStartButton.disabled = false;
     dom.confirmStartButton.textContent = "게임 시작";
-    window.setTimeout(() => dom.mineButton.focus(), 80);
+    if (state.cosmetics.selectionConfirmed) {
+      window.setTimeout(() => dom.mineButton.focus(), 80);
+    } else {
+      window.setTimeout(() => openCharacterDialog({ onboarding: true }), 80);
+    }
   }
 
   function createDefaultData(now = Date.now()) {
@@ -740,7 +828,10 @@
       totalClicks: 0,
       upgrades: Object.fromEntries(UPGRADE_DEFINITIONS.map((upgrade) => [upgrade.id, 0])),
       selectedOreId: ORE_DEFINITIONS[0].id,
-      cosmetics: { ...DEFAULT_COSMETICS },
+      cosmetics: {
+        ...DEFAULT_COSMETICS,
+        ownedOutfitIds: [...DEFAULT_COSMETICS.ownedOutfitIds],
+      },
       unlockedAchievements: {},
       stats: {
         playTimeMs: 0,
@@ -779,6 +870,8 @@
       cosmetics: {
         characterId: data.cosmetics.characterId,
         outfitId: data.cosmetics.outfitId,
+        selectionConfirmed: data.cosmetics.selectionConfirmed,
+        ownedOutfitIds: [...data.cosmetics.ownedOutfitIds],
       },
       unlockedAchievements: { ...data.unlockedAchievements },
       stats: {
@@ -907,11 +1000,32 @@
 
     const characterId = input.cosmetics.characterId;
     const outfitId = input.cosmetics.outfitId;
+    const selectionConfirmed = input.cosmetics.selectionConfirmed;
+    const ownedOutfitIdsInput = input.cosmetics.ownedOutfitIds;
     if (!CHARACTER_DEFINITIONS.some((character) => character.id === characterId)) {
       throw new SaveValidationError("선택 캐릭터 ID가 올바르지 않습니다.");
     }
-    if (!CHARACTER_OUTFITS.some((outfit) => outfit.id === outfitId)) {
-      throw new SaveValidationError("선택 복장 ID가 올바르지 않습니다.");
+    if (typeof selectionConfirmed !== "boolean") {
+      throw new SaveValidationError("광부 선택 완료 상태가 올바르지 않습니다.");
+    }
+    if (!Array.isArray(ownedOutfitIdsInput) || ownedOutfitIdsInput.length === 0) {
+      throw new SaveValidationError("보유 복장 목록이 올바르지 않습니다.");
+    }
+    const ownedOutfitIdsSet = new Set(ownedOutfitIdsInput);
+    if (ownedOutfitIdsSet.size !== ownedOutfitIdsInput.length) {
+      throw new SaveValidationError("보유 복장 목록에 중복 값이 있습니다.");
+    }
+    const ownedOutfitIds = CHARACTER_OUTFITS
+      .filter((outfit) => ownedOutfitIdsSet.has(outfit.id))
+      .map((outfit) => outfit.id);
+    if (ownedOutfitIds.length !== ownedOutfitIdsInput.length || !ownedOutfitIdsSet.has(DEFAULT_COSMETICS.outfitId)) {
+      throw new SaveValidationError("보유 복장 목록에 알 수 없는 복장이 있거나 기본 광부복이 없습니다.");
+    }
+    if (ownedOutfitIds.some((id) => getCharacterOutfit(id).unlockOreLevel > highestUnlockedOreIndex)) {
+      throw new SaveValidationError("아직 해금 조건을 달성하지 않은 복장이 보유 목록에 있습니다.");
+    }
+    if (!ownedOutfitIdsSet.has(outfitId)) {
+      throw new SaveValidationError("현재 선택 복장을 보유하고 있지 않습니다.");
     }
 
     return {
@@ -920,7 +1034,7 @@
       totalClicks: validatedNumber(input.totalClicks, "총 클릭", MAX_SAFE_VALUE, true),
       upgrades,
       selectedOreId,
-      cosmetics: { characterId, outfitId },
+      cosmetics: { characterId, outfitId, selectionConfirmed, ownedOutfitIds },
       unlockedAchievements: achievements,
       stats: {
         playTimeMs: validatedNumber(input.stats.playTimeMs, "플레이 시간"),
@@ -1183,6 +1297,7 @@
       evaluateAchievements(true);
       renderGameValues();
       renderUpgrades();
+      if (dom.characterDialog.open) renderOutfitShop();
       lastRenderAt = now;
     }
   }
@@ -1427,6 +1542,45 @@
     }
   }
 
+  function buildOutfitCards() {
+    dom.outfitShopList.replaceChildren();
+    outfitElements.clear();
+
+    for (const definition of CHARACTER_OUTFITS) {
+      const card = document.createElement("article");
+      card.className = "outfit-card";
+      card.dataset.outfitId = definition.id;
+
+      const icon = document.createElement("span");
+      icon.className = "outfit-card-icon";
+      icon.textContent = definition.icon;
+      icon.setAttribute("aria-hidden", "true");
+
+      const info = document.createElement("div");
+      info.className = "outfit-card-info";
+      const name = document.createElement("h4");
+      name.textContent = definition.name;
+      const description = document.createElement("p");
+      description.textContent = definition.description;
+      const status = document.createElement("strong");
+      status.className = "outfit-card-status";
+      info.append(name, description, status);
+
+      const buyButton = document.createElement("button");
+      buyButton.className = "pixel-button pixel-button--small outfit-buy-button";
+      buyButton.type = "button";
+      const buyLabel = document.createElement("span");
+      const cost = document.createElement("span");
+      cost.className = "outfit-buy-cost";
+      buyButton.append(buyLabel, cost);
+      buyButton.addEventListener("click", () => purchaseOutfit(definition.id));
+
+      card.append(icon, info, buyButton);
+      dom.outfitShopList.append(card);
+      outfitElements.set(definition.id, { card, status, buyButton, buyLabel, cost });
+    }
+  }
+
   function buildMineralCatalogCards() {
     dom.mineralCatalogList.replaceChildren();
     mineralElements.clear();
@@ -1605,6 +1759,7 @@
     renderAchievements();
     renderSaveDetails();
     renderCharacterState();
+    renderOutfitShop();
   }
 
   function getCharacterDefinition(id) {
@@ -1704,11 +1859,154 @@
     renderMinerActorPose(true);
   }
 
-  function openCharacterDialog() {
+  function isOutfitOwned(outfitId) {
+    return Boolean(state?.cosmetics.ownedOutfitIds.includes(outfitId));
+  }
+
+  function isOutfitUnlocked(definition) {
+    return Boolean(state && state.upgrades[ORE_MILESTONE_UPGRADE_ID] >= definition.unlockOreLevel);
+  }
+
+  function populateOutfitSelect(preferredOutfitId) {
+    if (!state) return;
+    const onboarding = isRequiredCharacterSelection(dom.characterDialog);
+    const availableOutfits = onboarding
+      ? [getCharacterOutfit(DEFAULT_COSMETICS.outfitId)]
+      : CHARACTER_OUTFITS.filter((outfit) => isOutfitOwned(outfit.id));
+    const selectedOutfitId = availableOutfits.some((outfit) => outfit.id === preferredOutfitId)
+      ? preferredOutfitId
+      : availableOutfits[0].id;
+
+    dom.gameOutfitSelect.replaceChildren();
+    availableOutfits.forEach((outfit) => {
+      const option = document.createElement("option");
+      option.value = outfit.id;
+      option.textContent = outfit.name;
+      dom.gameOutfitSelect.append(option);
+    });
+    dom.gameOutfitSelect.value = selectedOutfitId;
+    dom.gameOutfitSelect.disabled = onboarding || availableOutfits.length <= 1;
+    dom.gameOutfitNote.textContent = onboarding
+      ? "첫 광부는 기본 광부복으로 시작합니다."
+      : `보유 복장 ${availableOutfits.length}/${CHARACTER_OUTFITS.length} · 구매한 복장은 모든 캐릭터가 함께 사용합니다.`;
+  }
+
+  function renderOutfitShop() {
+    if (!state || outfitElements.size === 0) return;
+    const previewOutfitId = dom.gameOutfitSelect.value || state.cosmetics.outfitId;
+
+    for (const definition of CHARACTER_OUTFITS) {
+      const elements = outfitElements.get(definition.id);
+      const owned = isOutfitOwned(definition.id);
+      const unlocked = isOutfitUnlocked(definition);
+      const current = state.cosmetics.outfitId === definition.id;
+      const previewing = previewOutfitId === definition.id;
+      const unlockOre = ORE_DEFINITIONS[definition.unlockOreLevel];
+      const canAfford = state.currency >= definition.price;
+
+      elements.card.classList.toggle("is-owned", owned);
+      elements.card.classList.toggle("is-current", current);
+      elements.card.classList.toggle("is-previewing", previewing && !current);
+      elements.card.classList.toggle("is-locked", !unlocked);
+      elements.card.dataset.state = current
+        ? "current"
+        : owned
+          ? "owned"
+          : unlocked
+            ? "available"
+            : "locked";
+      elements.status.textContent = current
+        ? "현재 착용 중"
+        : owned
+          ? (previewing ? "미리보기 중" : "구매 완료")
+          : unlocked
+            ? `${unlockOre.name} 광맥 발견 · 구매 가능`
+            : `${unlockOre.name} 광맥 발견 시 해금`;
+      elements.cost.textContent = definition.price === 0 ? "기본 지급" : `${formatNumber(definition.price)} 광석`;
+      elements.cost.title = definition.price === 0 ? "무료" : formatExactNumber(definition.price);
+
+      if (owned) {
+        elements.buyLabel.textContent = definition.price === 0 ? "기본 복장" : "구매 완료";
+      } else if (!unlocked) {
+        elements.buyLabel.textContent = "잠김";
+      } else if (!canAfford) {
+        elements.buyLabel.textContent = "광석 부족";
+      } else {
+        elements.buyLabel.textContent = "구매";
+      }
+      elements.buyButton.disabled = owned || !unlocked || !canAfford || sessionBlocked;
+      elements.buyButton.setAttribute(
+        "aria-label",
+        owned
+          ? `${definition.name} 구매 완료`
+          : !unlocked
+            ? `${definition.name} 잠김, ${unlockOre.name} 광맥 발견 필요`
+            : `${definition.name} 구매, ${formatNumber(definition.price)} 광석`,
+      );
+    }
+  }
+
+  function purchaseOutfit(outfitId) {
+    if (!sessionStarted || sessionBlocked || !state) return;
+    const definition = CHARACTER_OUTFITS.find((outfit) => outfit.id === outfitId);
+    if (!definition || isOutfitOwned(outfitId)) return;
+
+    advanceDataTo(state, Date.now(), false);
+    const unlockOre = ORE_DEFINITIONS[definition.unlockOreLevel];
+    if (!isOutfitUnlocked(definition)) {
+      showToast(`${unlockOre.name} 광맥을 발견해야 ${definition.name}을 구매할 수 있습니다.`, {
+        error: true,
+        key: `outfit:${outfitId}:locked`,
+      });
+      return;
+    }
+    if (state.currency < definition.price) {
+      showToast(`${definition.name} 구매에 필요한 광석이 부족합니다.`, {
+        error: true,
+        key: `outfit:${outfitId}:insufficient`,
+      });
+      return;
+    }
+
+    state.currency = Math.max(0, state.currency - definition.price);
+    const owned = new Set([...state.cosmetics.ownedOutfitIds, outfitId]);
+    state.cosmetics.ownedOutfitIds = CHARACTER_OUTFITS
+      .filter((outfit) => owned.has(outfit.id))
+      .map((outfit) => outfit.id);
+    populateOutfitSelect(outfitId);
+    renderAll();
+    void renderCharacterDialogPreview();
+    const saved = saveGame(`${definition.name} 구매`, false);
+    showToast(
+      saved
+        ? `${definition.name}을 구매했습니다. 적용 버튼을 누르면 착용합니다.`
+        : `${definition.name}을 구매했지만 로컬 저장에는 실패했습니다.`,
+      { error: !saved, key: saved ? `outfit:${outfitId}:purchased` : `outfit:${outfitId}:save-error` },
+    );
+    void refreshStorageEstimate();
+  }
+
+  function isRequiredCharacterSelection(dialog) {
+    return dialog === dom.characterDialog && dialog.dataset.mode === "onboarding";
+  }
+
+  function openCharacterDialog(options = {}) {
     if (!state || sessionBlocked) return;
+    const onboarding = options.onboarding === true && !state.cosmetics.selectionConfirmed;
+    dom.characterDialog.dataset.mode = onboarding ? "onboarding" : "menu";
+    dom.characterDialogHeading.textContent = onboarding ? "첫 광부 선택" : "광부 선택";
+    dom.characterDialogDescription.textContent = onboarding
+      ? "함께 광산을 시작할 광부를 선택하세요. 모든 광부는 기본 광부복으로 시작합니다."
+      : "캐릭터와 보유 복장을 선택하세요. 새 복장은 광맥 발견 조건을 달성한 뒤 광석으로 구매할 수 있습니다.";
+    dom.applyCharacterButton.textContent = onboarding ? "이 광부로 게임 시작" : "이 광부 적용";
     dom.gameCharacterSelect.value = state.cosmetics.characterId;
-    dom.gameOutfitSelect.value = state.cosmetics.outfitId;
-    setDialogStatus(dom.characterDialogStatus, "선택한 광부를 미리 보는 중입니다.", false);
+    populateOutfitSelect(onboarding ? DEFAULT_COSMETICS.outfitId : state.cosmetics.outfitId);
+    renderOutfitShop();
+    setDialogStatus(
+      dom.characterDialogStatus,
+      onboarding ? "여자·남자·드워프 중 한 명을 선택해주세요." : "선택한 광부를 미리 보는 중입니다.",
+      false,
+    );
     void renderCharacterDialogPreview();
     openDialog(dom.characterDialog);
   }
@@ -1733,17 +2031,30 @@
 
   function applyCharacterSelection() {
     if (!state || sessionBlocked) return;
+    const onboarding = isRequiredCharacterSelection(dom.characterDialog);
     const character = getCharacterDefinition(dom.gameCharacterSelect.value);
-    const outfit = getCharacterOutfit(dom.gameOutfitSelect.value);
-    state.cosmetics = { characterId: character.id, outfitId: outfit.id };
+    const selectedOutfitId = onboarding ? DEFAULT_COSMETICS.outfitId : dom.gameOutfitSelect.value;
+    const outfit = isOutfitOwned(selectedOutfitId)
+      ? getCharacterOutfit(selectedOutfitId)
+      : getCharacterOutfit(DEFAULT_COSMETICS.outfitId);
+    state.cosmetics = {
+      ...state.cosmetics,
+      characterId: character.id,
+      outfitId: outfit.id,
+      selectionConfirmed: true,
+    };
     renderCharacterState();
-    const saved = saveGame("광부 선택", false);
+    renderOutfitShop();
+    const saved = saveGame(onboarding ? "첫 광부 선택" : "광부 선택", false);
     closeDialog(dom.characterDialog);
     showToast(
-      saved ? `${character.name} · ${outfit.name}을 적용하고 저장했습니다.` : `${character.name} · ${outfit.name}을 적용했지만 로컬 저장에는 실패했습니다.`,
+      saved
+        ? `${character.name} · ${outfit.name}을 적용하고 저장했습니다.`
+        : `${character.name} · ${outfit.name}을 적용했지만 로컬 저장에는 실패했습니다.`,
       { error: !saved, key: saved ? "character:applied" : "character:save-error" },
     );
     void refreshStorageEstimate();
+    if (onboarding) window.setTimeout(() => dom.mineButton.focus(), 80);
   }
 
   function shouldReduceMinerMotion() {
@@ -2253,6 +2564,9 @@
         key: saved ? "save:import-success" : "save:import-error",
       });
       if (shouldShowOfflineReward(offlineResult)) showOfflineReward(offlineResult);
+      if (!state.cosmetics.selectionConfirmed) {
+        window.setTimeout(() => openCharacterDialog({ onboarding: true }), 80);
+      }
       void refreshStorageEstimate();
     } catch (error) {
       const message = error instanceof Error ? error.message : "알 수 없는 불러오기 오류입니다.";
@@ -2291,6 +2605,7 @@
         key: successful ? "save:reset-success" : "save:reset-error",
       },
     );
+    window.setTimeout(() => openCharacterDialog({ onboarding: true }), 80);
     void refreshStorageEstimate();
   }
 

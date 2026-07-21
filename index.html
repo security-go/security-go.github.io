@@ -179,7 +179,7 @@
               id="characterMenuButton"
               class="character-menu-button"
               type="button"
-              aria-label="광부 선택 열기, 여자 광부와 기본 광부복 적용 중"
+              aria-label="광부 선택 열기, 남자 광부와 기본 광부복 적용 중"
               aria-haspopup="dialog"
               aria-controls="characterDialog"
               aria-expanded="false"
@@ -188,7 +188,7 @@
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path d="M8 8a4 4 0 1 1 8 0M6 8h12M9 4h6M7 21v-5c0-3 2-5 5-5s5 2 5 5v5M4 21h16"></path>
               </svg>
-              <span id="characterMenuLabel">여자 · 기본</span>
+              <span id="characterMenuLabel">남자 · 기본</span>
             </button>
             <span id="currentOreBadge" class="section-badge">석탄 · 1/6</span>
           </div>
@@ -279,7 +279,7 @@
       </button>
       <p class="eyebrow">MINER CUSTOMIZE</p>
       <h2 id="characterDialogHeading">광부 선택</h2>
-      <p class="character-dialog-description">캐릭터와 복장을 선택하세요. 광산에서는 옆모습으로 왕복하고 이동 방향에 따라 자동으로 좌우 반전됩니다.</p>
+      <p id="characterDialogDescription" class="character-dialog-description">캐릭터와 보유 복장을 선택하세요.</p>
 
       <div class="character-customizer">
         <div class="character-dialog-preview" aria-label="선택한 광부 미리보기">
@@ -302,13 +302,12 @@
             </select>
           </label>
 
-          <label class="character-selector-control" for="gameOutfitSelect">
-            <span>복장</span>
-            <select id="gameOutfitSelect">
+          <label id="gameOutfitControl" class="character-selector-control" for="gameOutfitSelect">
+            <span>보유 복장</span>
+            <select id="gameOutfitSelect" disabled aria-describedby="gameOutfitNote">
               <option value="workwear">기본 광부복</option>
-              <option value="casual">캐주얼</option>
-              <option value="space">우주복</option>
             </select>
+            <small id="gameOutfitNote" class="character-outfit-note">첫 광부는 기본 광부복으로 시작합니다.</small>
           </label>
 
           <div class="character-behavior-note" role="note">
@@ -317,6 +316,17 @@
           </div>
         </div>
       </div>
+
+      <section class="outfit-shop" aria-labelledby="outfitShopHeading">
+        <div class="outfit-shop-heading">
+          <div>
+            <p class="eyebrow">OUTFIT SHOP</p>
+            <h3 id="outfitShopHeading">복장 상점</h3>
+          </div>
+          <p>구매한 복장은 능력치 변화 없이 모든 캐릭터가 함께 사용합니다.</p>
+        </div>
+        <div id="outfitShopList" class="outfit-shop-list"></div>
+      </section>
 
       <p id="characterDialogStatus" class="dialog-status" role="status" aria-live="polite"></p>
       <div class="dialog-actions">
@@ -508,7 +518,7 @@
       <h2>세이브 코드 불러오기</h2>
       <p id="importDialogDescription">검증이 완료된 코드만 현재 진행도를 대체합니다. 불러오기 전에 현재 세이브를 내보내는 것을 권장합니다.</p>
       <label class="field-label" for="importCode">세이브 코드 붙여넣기</label>
-      <textarea id="importCode" class="save-code-field" rows="8" spellcheck="false" autocomplete="off" placeholder="PIXELMINE-V4:..."></textarea>
+      <textarea id="importCode" class="save-code-field" rows="8" spellcheck="false" autocomplete="off" placeholder="PIXELMINE-V6:..."></textarea>
       <p id="importStatus" class="dialog-status" aria-live="polite"></p>
       <div class="dialog-actions">
         <button id="confirmImportButton" class="pixel-button pixel-button--primary" type="button">검증 후 불러오기</button>
