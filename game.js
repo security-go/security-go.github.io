@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const SAVE_VERSION = 6;
+  const SAVE_VERSION = 7;
   const SAVE_KEY = "pixelMine.save";
   const CORRUPT_SAVE_KEY = "pixelMine.corruptSave";
   const TAB_LEASE_KEY = "pixelMine.activeTab";
@@ -20,6 +20,9 @@
   const MAX_VISIBLE_TOASTS = 3;
   const TOAST_DURATION_MS = 3_600;
   const BACKGROUND_MUSIC_VOLUME = 0.22;
+  const DEFAULT_SOUND_EFFECTS_VOLUME = 0.4;
+  const MINING_SOUND_MAX_VOICES = 6;
+  const MINING_SOUND_DURATIONS = Object.freeze([0.09, 0.105, 0.122, 0.138]);
   const ORE_MILESTONE_UPGRADE_ID = "ore_milestone";
   const CHARACTER_CELL_SIZE = 418;
   const CHARACTER_CANVAS_WIDTH = 360;
@@ -64,6 +67,7 @@
       description: "최심부와 극한 환경을 견디는 미래형 채굴복입니다.",
       price: 1_200_000_000,
       unlockOreLevel: 4,
+      requiresPurchaseConfirmation: true,
       src: "assets/pixel-miner-space-character-sheet.png",
     }),
   ]);
@@ -209,6 +213,15 @@
       },
     },
   ]);
+
+  const MINING_SOUND_PROFILES = Object.freeze({
+    coal: Object.freeze({ playbackRate: 0.96, brightness: 1_800, gain: 0.94 }),
+    bronze: Object.freeze({ playbackRate: 0.99, brightness: 2_300, gain: 0.92 }),
+    iron: Object.freeze({ playbackRate: 1.01, brightness: 2_900, gain: 0.95 }),
+    gold: Object.freeze({ playbackRate: 1.03, brightness: 3_500, gain: 0.91 }),
+    ruby: Object.freeze({ playbackRate: 1.06, brightness: 4_300, gain: 0.89 }),
+    diamond: Object.freeze({ playbackRate: 1.08, brightness: 5_200, gain: 0.87 }),
+  });
 
   const UPGRADE_DEFINITIONS = Object.freeze([
     {
@@ -367,6 +380,18 @@
       description: "다이아 광맥을 발견한다.",
       condition: (data) => data.upgrades[ORE_MILESTONE_UPGRADE_ID] >= 5,
     },
+    {
+      id: "buy_casual_outfit",
+      name: "광산 밖의 하루",
+      description: "캐주얼 복장을 구매한다.",
+      condition: (data) => data.cosmetics.ownedOutfitIds.includes("casual"),
+    },
+    {
+      id: "buy_space_outfit",
+      name: "별을 캐는 광부",
+      description: "우주복을 구매한다.",
+      condition: (data) => data.cosmetics.ownedOutfitIds.includes("space"),
+    },
   ]);
 
   const MIGRATIONS = Object.freeze({
@@ -477,6 +502,23 @@
         },
       };
     },
+    6: (payload) => {
+      if (!isPlainObject(payload.data)) throw new SaveValidationError("v6 data 객체가 없습니다.");
+      const settings = isPlainObject(payload.data.settings) ? payload.data.settings : {};
+
+      return {
+        version: 7,
+        meta: isPlainObject(payload.meta) ? payload.meta : { app: "PIXEL_MINE", label: "픽셀 광산" },
+        data: {
+          ...payload.data,
+          settings: {
+            ...settings,
+            soundEffectsEnabled: settings.soundEffectsEnabled ?? true,
+            soundEffectsVolume: settings.soundEffectsVolume ?? DEFAULT_SOUND_EFFECTS_VOLUME,
+          },
+        },
+      };
+    },
   });
 
   class SaveValidationError extends Error {}
@@ -500,6 +542,15 @@
     miningUntil: 0,
     idleUntil: 0,
     lastFrameAt: 0,
+  };
+  const miningSoundEngine = {
+    context: null,
+    buffers: [],
+    compressor: null,
+    masterGain: null,
+    activeSources: new Set(),
+    lastVariantIndex: -1,
+    bufferGenerationCount: 0,
   };
   const storageState = {
     available: false,
@@ -526,12 +577,14 @@
   let minerPoseResetTimer = null;
   let lastRenderAt = 0;
   let purchaseMode = "one";
+  let pendingOutfitPurchaseId = null;
 
   document.addEventListener("DOMContentLoaded", initialize);
 
   function initialize() {
     cacheDom();
     configureBackgroundMusic();
+    configureMiningSoundEffects();
     bindEvents();
     drawOreSprite();
     prepareProtocolGate();
@@ -561,6 +614,10 @@
       "backgroundMusic",
       "musicToggle",
       "musicStatus",
+      "soundEffectsToggle",
+      "soundEffectsVolume",
+      "soundEffectsVolumeValue",
+      "soundEffectsStatus",
       "currencyValue",
       "perClickValue",
       "perSecondValue",
@@ -595,6 +652,12 @@
       "outfitShopList",
       "characterDialogStatus",
       "applyCharacterButton",
+      "outfitPurchaseDialog",
+      "outfitPurchaseName",
+      "outfitPurchasePrice",
+      "outfitPurchaseBalance",
+      "outfitPurchaseRemaining",
+      "confirmOutfitPurchaseButton",
       "upgradeList",
       "mineralCatalogList",
       "mineralCatalogCount",
@@ -642,6 +705,15 @@
     dom.backgroundMusic.addEventListener("error", handleBackgroundMusicError);
   }
 
+  function configureMiningSoundEffects() {
+    const supported = Boolean(getAudioContextConstructor());
+    dom.soundEffectsStatus.dataset.supported = String(supported);
+    if (supported) return;
+    dom.soundEffectsToggle.disabled = true;
+    dom.soundEffectsVolume.disabled = true;
+    setSoundEffectsStatus("미지원 · 효과음 없이 게임을 계속할 수 있습니다.", true);
+  }
+
   function bindEvents() {
     dom.startButton.addEventListener("click", openStartStorageDialog);
     dom.confirmStartButton.addEventListener("click", handleStart);
@@ -654,6 +726,7 @@
       void renderCharacterDialogPreview();
     });
     dom.applyCharacterButton.addEventListener("click", applyCharacterSelection);
+    dom.confirmOutfitPurchaseButton.addEventListener("click", confirmOutfitPurchase);
     dom.purchaseModeButtons.forEach((button) => {
       button.addEventListener("click", () => setPurchaseMode(button.dataset.purchaseMode));
     });
@@ -691,6 +764,8 @@
     });
     dom.confirmResetButton.addEventListener("click", resetGame);
     dom.musicToggle.addEventListener("change", handleMusicSetting);
+    dom.soundEffectsToggle.addEventListener("change", handleSoundEffectsToggle);
+    dom.soundEffectsVolume.addEventListener("input", handleSoundEffectsVolume);
     dom.reducedMotionToggle.addEventListener("change", handleMotionSetting);
 
     document.querySelectorAll("[data-close-dialog]").forEach((button) => {
@@ -704,7 +779,10 @@
       dialog.addEventListener("cancel", (event) => {
         if (isRequiredCharacterSelection(dialog)) event.preventDefault();
       });
-      dialog.addEventListener("close", () => syncDialogTrigger(dialog, false));
+      dialog.addEventListener("close", () => {
+        if (dialog === dom.outfitPurchaseDialog) pendingOutfitPurchaseId = null;
+        syncDialogTrigger(dialog, false);
+      });
     });
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -783,6 +861,7 @@
     const offlineResult = advanceDataTo(state, Date.now(), true);
     applyMotionSetting();
     applyMusicSetting({ attemptPlayback: true, notifyBlocked: true });
+    applySoundEffectsSetting();
     buildUpgradeCards();
     buildMineralCatalogCards();
     buildAchievementCards();
@@ -839,6 +918,8 @@
       },
       settings: {
         musicEnabled: true,
+        soundEffectsEnabled: true,
+        soundEffectsVolume: DEFAULT_SOUND_EFFECTS_VOLUME,
         reducedMotion: false,
       },
       lastProcessedAt: now,
@@ -880,6 +961,8 @@
       },
       settings: {
         musicEnabled: data.settings.musicEnabled,
+        soundEffectsEnabled: data.settings.soundEffectsEnabled,
+        soundEffectsVolume: data.settings.soundEffectsVolume,
         reducedMotion: data.settings.reducedMotion,
       },
       lastProcessedAt: data.lastProcessedAt,
@@ -994,6 +1077,15 @@
     if (typeof musicEnabled !== "boolean") {
       throw new SaveValidationError("배경음악 설정이 올바르지 않습니다.");
     }
+    const soundEffectsEnabled = input.settings.soundEffectsEnabled ?? true;
+    if (typeof soundEffectsEnabled !== "boolean") {
+      throw new SaveValidationError("채굴 효과음 설정이 올바르지 않습니다.");
+    }
+    const soundEffectsVolume = validatedNumber(
+      input.settings.soundEffectsVolume ?? DEFAULT_SOUND_EFFECTS_VOLUME,
+      "채굴 효과음 음량",
+      1,
+    );
     if (typeof input.settings.reducedMotion !== "boolean") {
       throw new SaveValidationError("모션 감소 설정이 올바르지 않습니다.");
     }
@@ -1042,6 +1134,8 @@
       },
       settings: {
         musicEnabled,
+        soundEffectsEnabled,
+        soundEffectsVolume,
         reducedMotion: input.settings.reducedMotion,
       },
       lastProcessedAt: validatedNumber(input.lastProcessedAt, "마지막 처리 시각", Number.MAX_SAFE_INTEGER, true),
@@ -1248,6 +1342,7 @@
     sessionBlocked = true;
     sessionStarted = false;
     stopMinerActorMotion();
+    stopActiveMiningSounds(true);
     window.clearTimeout(minerPoseResetTimer);
     minerPoseResetTimer = null;
     stopSessionTimers();
@@ -1425,6 +1520,7 @@
     if (!sessionStarted || sessionBlocked || !state) return;
     advanceDataTo(state, Date.now(), false);
     triggerMinerMiningPose();
+    playMiningSoundEffect();
 
     const gain = calculateClickPower();
     state.currency = safeAdd(state.currency, gain);
@@ -1573,7 +1669,7 @@
       const cost = document.createElement("span");
       cost.className = "outfit-buy-cost";
       buyButton.append(buyLabel, cost);
-      buyButton.addEventListener("click", () => purchaseOutfit(definition.id));
+      buyButton.addEventListener("click", () => requestOutfitPurchase(definition.id));
 
       card.append(icon, info, buyButton);
       dom.outfitShopList.append(card);
@@ -1974,6 +2070,7 @@
       .filter((outfit) => owned.has(outfit.id))
       .map((outfit) => outfit.id);
     populateOutfitSelect(outfitId);
+    evaluateAchievements(true);
     renderAll();
     void renderCharacterDialogPreview();
     const saved = saveGame(`${definition.name} 구매`, false);
@@ -1984,6 +2081,37 @@
       { error: !saved, key: saved ? `outfit:${outfitId}:purchased` : `outfit:${outfitId}:save-error` },
     );
     void refreshStorageEstimate();
+  }
+
+  function requestOutfitPurchase(outfitId) {
+    if (!sessionStarted || sessionBlocked || !state) return;
+    const definition = CHARACTER_OUTFITS.find((outfit) => outfit.id === outfitId);
+    if (!definition || isOutfitOwned(outfitId)) return;
+
+    advanceDataTo(state, Date.now(), false);
+    if (!definition.requiresPurchaseConfirmation || !isOutfitUnlocked(definition) || state.currency < definition.price) {
+      purchaseOutfit(outfitId);
+      return;
+    }
+
+    pendingOutfitPurchaseId = outfitId;
+    const remaining = Math.max(0, state.currency - definition.price);
+    dom.outfitPurchaseName.textContent = definition.name;
+    dom.outfitPurchasePrice.textContent = `${formatNumber(definition.price)} 광석`;
+    dom.outfitPurchasePrice.title = `${formatExactNumber(definition.price)} 광석`;
+    dom.outfitPurchaseBalance.textContent = `${formatNumber(state.currency)} 광석`;
+    dom.outfitPurchaseBalance.title = `${formatExactNumber(state.currency)} 광석`;
+    dom.outfitPurchaseRemaining.textContent = `${formatNumber(remaining)} 광석`;
+    dom.outfitPurchaseRemaining.title = `${formatExactNumber(remaining)} 광석`;
+    dom.confirmOutfitPurchaseButton.textContent = `${formatNumber(definition.price)} 광석으로 구매`;
+    openDialog(dom.outfitPurchaseDialog);
+  }
+
+  function confirmOutfitPurchase() {
+    const outfitId = pendingOutfitPurchaseId;
+    pendingOutfitPurchaseId = null;
+    closeDialog(dom.outfitPurchaseDialog);
+    if (outfitId) purchaseOutfit(outfitId);
   }
 
   function isRequiredCharacterSelection(dialog) {
@@ -2555,6 +2683,7 @@
       state = importedData;
       applyMotionSetting();
       applyMusicSetting({ attemptPlayback: true, notifyBlocked: true });
+      applySoundEffectsSetting();
       evaluateAchievements(true);
       renderAll();
       const saved = saveGame("불러오기 완료", false);
@@ -2592,6 +2721,7 @@
     state = createDefaultData();
     applyMotionSetting();
     applyMusicSetting({ attemptPlayback: true, notifyBlocked: true });
+    applySoundEffectsSetting();
     evaluateAchievements(false);
     renderAll();
     const saved = saveGame("초기화 완료", false);
@@ -2718,6 +2848,250 @@
     dom.musicStatus.classList.toggle("is-error", error);
   }
 
+  function handleSoundEffectsToggle() {
+    if (!state) return;
+    state.settings.soundEffectsEnabled = dom.soundEffectsToggle.checked;
+    if (!state.settings.soundEffectsEnabled) stopActiveMiningSounds(true);
+    applySoundEffectsSetting();
+    scheduleMutationSave();
+  }
+
+  function handleSoundEffectsVolume() {
+    if (!state) return;
+    const percent = Math.min(100, Math.max(0, Number(dom.soundEffectsVolume.value) || 0));
+    state.settings.soundEffectsVolume = percent / 100;
+    if (state.settings.soundEffectsVolume === 0) stopActiveMiningSounds(true);
+    applySoundEffectsSetting();
+    scheduleMutationSave();
+  }
+
+  function applySoundEffectsSetting() {
+    if (!state) return;
+    const supported = Boolean(getAudioContextConstructor());
+    const volumePercent = Math.round(state.settings.soundEffectsVolume * 100);
+    dom.soundEffectsToggle.checked = state.settings.soundEffectsEnabled;
+    dom.soundEffectsToggle.disabled = !supported;
+    dom.soundEffectsVolume.value = String(volumePercent);
+    dom.soundEffectsVolume.disabled = !supported || !state.settings.soundEffectsEnabled;
+    dom.soundEffectsVolume.setAttribute("aria-valuetext", `${volumePercent}%`);
+    dom.soundEffectsVolumeValue.textContent = `${volumePercent}%`;
+    updateMiningSoundMasterGain();
+
+    if (!supported) {
+      setSoundEffectsStatus("미지원 · 효과음 없이 게임을 계속할 수 있습니다.", true);
+    } else if (!state.settings.soundEffectsEnabled) {
+      setSoundEffectsStatus("꺼짐 · 설정은 이 브라우저에 저장됩니다.", false);
+    } else if (volumePercent === 0) {
+      setSoundEffectsStatus("켜짐 · 음량 0%로 재생되지 않습니다.", false);
+    } else {
+      setSoundEffectsStatus(`켜짐 · 음량 ${volumePercent}% · 광물별 ${MINING_SOUND_DURATIONS.length}개 변형`, false);
+    }
+  }
+
+  function setSoundEffectsStatus(message, error) {
+    dom.soundEffectsStatus.textContent = message;
+    dom.soundEffectsStatus.classList.toggle("is-error", error);
+  }
+
+  function getAudioContextConstructor() {
+    return window.AudioContext || window.webkitAudioContext || null;
+  }
+
+  function ensureMiningSoundEngine() {
+    const existingContext = miningSoundEngine.context;
+    if (existingContext && existingContext.state !== "closed" && miningSoundEngine.buffers.length > 0) {
+      return miningSoundEngine;
+    }
+
+    const AudioContextConstructor = getAudioContextConstructor();
+    if (!AudioContextConstructor) return null;
+
+    try {
+      const context = new AudioContextConstructor();
+      const compressor = context.createDynamicsCompressor();
+      const masterGain = context.createGain();
+      compressor.threshold.setValueAtTime(-18, context.currentTime);
+      compressor.knee.setValueAtTime(12, context.currentTime);
+      compressor.ratio.setValueAtTime(6, context.currentTime);
+      compressor.attack.setValueAtTime(0.002, context.currentTime);
+      compressor.release.setValueAtTime(0.08, context.currentTime);
+      compressor.connect(masterGain);
+      masterGain.connect(context.destination);
+
+      miningSoundEngine.context = context;
+      miningSoundEngine.buffers = createMiningSoundBuffers(context);
+      miningSoundEngine.compressor = compressor;
+      miningSoundEngine.masterGain = masterGain;
+      miningSoundEngine.activeSources.clear();
+      miningSoundEngine.lastVariantIndex = -1;
+      miningSoundEngine.bufferGenerationCount += 1;
+      dom.mineButton.dataset.sfxBufferCount = String(miningSoundEngine.buffers.length);
+      dom.mineButton.dataset.sfxBufferGenerationCount = String(miningSoundEngine.bufferGenerationCount);
+      updateMiningSoundMasterGain();
+      return miningSoundEngine;
+    } catch {
+      setSoundEffectsStatus("초기화 실패 · 효과음 없이 게임을 계속할 수 있습니다.", true);
+      return null;
+    }
+  }
+
+  function createMiningSoundBuffers(context) {
+    return MINING_SOUND_DURATIONS.map((duration, variantIndex) => {
+      const sampleRate = context.sampleRate;
+      const length = Math.max(1, Math.ceil(sampleRate * duration));
+      const buffer = context.createBuffer(1, length, sampleRate);
+      const samples = buffer.getChannelData(0);
+      const metalFrequency = 1_180 + variantIndex * 135;
+      const stoneDelay = 0.012 + variantIndex * 0.0015;
+      let seed = (0x9e3779b9 ^ ((variantIndex + 1) * 0x45d9f3b)) >>> 0;
+      let previousNoise = 0;
+
+      for (let index = 0; index < length; index += 1) {
+        const time = index / sampleRate;
+        seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+        const noise = (seed / 0xffffffff) * 2 - 1;
+        const brightNoise = noise - previousNoise * 0.72;
+        previousNoise = noise;
+
+        const impactEnvelope = Math.exp(-time * (43 + variantIndex * 2));
+        const metal = Math.sin(Math.PI * 2 * metalFrequency * time + time * time * 1_900) * impactEnvelope;
+        const body = Math.sin(Math.PI * 2 * (165 + variantIndex * 13) * time) * Math.exp(-time * 58);
+        const stoneTime = time - stoneDelay;
+        const stoneEnvelope = stoneTime > 0
+          ? Math.min(1, stoneTime * 850) * Math.exp(-stoneTime * (24 + variantIndex * 1.5))
+          : 0;
+        const chipPulse = stoneTime > 0
+          ? Math.exp(-Math.abs(stoneTime - (0.021 + variantIndex * 0.002)) * 190)
+          : 0;
+        const fadeOut = Math.min(1, (duration - time) / 0.008);
+        const mixed = metal * 0.52 + body * 0.2 + brightNoise * stoneEnvelope * 0.17 + noise * chipPulse * 0.08;
+        samples[index] = Math.max(-1, Math.min(1, mixed * Math.max(0, fadeOut)));
+      }
+
+      return buffer;
+    });
+  }
+
+  function updateMiningSoundMasterGain() {
+    const context = miningSoundEngine.context;
+    const masterGain = miningSoundEngine.masterGain;
+    if (!context || !masterGain || context.state === "closed") return;
+    const enabled = Boolean(state?.settings.soundEffectsEnabled);
+    const target = enabled ? state.settings.soundEffectsVolume * 0.55 : 0;
+    masterGain.gain.cancelScheduledValues(context.currentTime);
+    masterGain.gain.setTargetAtTime(target, context.currentTime, 0.008);
+  }
+
+  function selectMiningSoundVariant(bufferCount) {
+    if (bufferCount <= 1) return 0;
+    if (miningSoundEngine.lastVariantIndex < 0) return Math.floor(Math.random() * bufferCount);
+    const offset = 1 + Math.floor(Math.random() * (bufferCount - 1));
+    return (miningSoundEngine.lastVariantIndex + offset) % bufferCount;
+  }
+
+  function playMiningSoundEffect() {
+    if (
+      !state?.settings.soundEffectsEnabled ||
+      state.settings.soundEffectsVolume <= 0 ||
+      document.hidden
+    ) return;
+
+    const engine = ensureMiningSoundEngine();
+    const context = engine?.context;
+    if (!engine || !context || engine.buffers.length === 0) return;
+
+    if (context.state === "suspended") {
+      try {
+        const resume = context.resume();
+        if (resume && typeof resume.catch === "function") {
+          resume.catch(() => setSoundEffectsStatus("재생 대기 · 광맥을 다시 눌러주세요.", true));
+        }
+      } catch {
+        setSoundEffectsStatus("재생 대기 · 광맥을 다시 눌러주세요.", true);
+      }
+    }
+
+    const variantIndex = selectMiningSoundVariant(engine.buffers.length);
+    const buffer = engine.buffers[variantIndex];
+    const ore = ORE_DEFINITIONS[getSelectedOreIndex()];
+    const profile = MINING_SOUND_PROFILES[ore.id] ?? MINING_SOUND_PROFILES.coal;
+    const playbackRate = profile.playbackRate * (0.988 + Math.random() * 0.024);
+    const brightness = Math.min(context.sampleRate * 0.45, profile.brightness * (0.96 + Math.random() * 0.08));
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const voiceGain = context.createGain();
+    source.buffer = buffer;
+    source.playbackRate.setValueAtTime(playbackRate, context.currentTime);
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(brightness, context.currentTime);
+    filter.Q.setValueAtTime(0.8, context.currentTime);
+    voiceGain.gain.setValueAtTime(profile.gain, context.currentTime);
+    source.connect(filter);
+    filter.connect(voiceGain);
+    voiceGain.connect(engine.compressor);
+
+    if (engine.activeSources.size >= MINING_SOUND_MAX_VOICES) {
+      const oldestSource = engine.activeSources.values().next().value;
+      if (oldestSource) {
+        engine.activeSources.delete(oldestSource);
+        try {
+          oldestSource.stop();
+        } catch {
+          // 이미 종료된 음성은 onended에서 정리된다.
+        }
+      }
+    }
+
+    engine.activeSources.add(source);
+    engine.lastVariantIndex = variantIndex;
+    source.addEventListener("ended", () => {
+      engine.activeSources.delete(source);
+      dom.mineButton.dataset.sfxActiveVoices = String(engine.activeSources.size);
+      source.disconnect();
+      filter.disconnect();
+      voiceGain.disconnect();
+    }, { once: true });
+
+    try {
+      source.start();
+      const playCount = Number(dom.mineButton.dataset.sfxPlayCount ?? 0) + 1;
+      dom.mineButton.dataset.sfxActiveVoices = String(engine.activeSources.size);
+      dom.mineButton.dataset.sfxPlayCount = String(playCount);
+      dom.mineButton.dataset.sfxVariant = String(variantIndex + 1);
+      dom.mineButton.dataset.sfxOre = ore.id;
+      dom.mineButton.dataset.sfxDurationMs = String(Math.round(buffer.duration * 1_000));
+      dom.mineButton.dataset.sfxPlaybackRate = playbackRate.toFixed(3);
+      dom.mineButton.dataset.sfxBrightness = String(Math.round(brightness));
+      dom.mineButton.dataset.sfxVolume = state.settings.soundEffectsVolume.toFixed(2);
+    } catch {
+      engine.activeSources.delete(source);
+      source.disconnect();
+      filter.disconnect();
+      voiceGain.disconnect();
+      setSoundEffectsStatus("재생 실패 · 광맥을 다시 눌러주세요.", true);
+    }
+  }
+
+  function stopActiveMiningSounds(suspendContext) {
+    for (const source of miningSoundEngine.activeSources) {
+      try {
+        source.stop();
+      } catch {
+        // 이미 종료된 음성은 무시한다.
+      }
+    }
+    miningSoundEngine.activeSources.clear();
+
+    const context = miningSoundEngine.context;
+    if (!suspendContext || !context || context.state !== "running") return;
+    try {
+      const suspended = context.suspend();
+      if (suspended && typeof suspended.catch === "function") suspended.catch(() => {});
+    } catch {
+      // 브라우저 종료 중에는 AudioContext 정지가 실패할 수 있다.
+    }
+  }
+
   function applyMotionSetting() {
     if (!state) return;
     dom.reducedMotionToggle.checked = state.settings.reducedMotion;
@@ -2729,6 +3103,7 @@
     if (!sessionStarted || sessionBlocked) return;
     if (document.hidden) {
       stopMinerActorMotion();
+      stopActiveMiningSounds(true);
       saveGame("백그라운드 저장");
       pauseBackgroundMusic("일시 정지 · 탭으로 돌아오면 재생합니다.");
     } else {
@@ -2745,6 +3120,7 @@
     if (!sessionStarted || sessionBlocked) return;
     pageIsHiding = true;
     stopMinerActorMotion();
+    stopActiveMiningSounds(true);
     saveGame("페이지 종료 저장");
     pauseBackgroundMusic("일시 정지 · 페이지를 다시 열면 재생합니다.");
     releaseTabLease();
@@ -2763,12 +3139,14 @@
     advanceDataTo(state, Date.now(), false);
     renderAll();
     applyMusicSetting({ attemptPlayback: true });
+    applySoundEffectsSetting();
     startMinerActorMotion();
   }
 
   function handleBeforeUnload() {
     if (!sessionStarted || sessionBlocked) return;
     stopMinerActorMotion();
+    stopActiveMiningSounds(true);
     if (!pageIsHiding) saveGame("종료 직전 저장");
     pauseBackgroundMusic();
     releaseTabLease();

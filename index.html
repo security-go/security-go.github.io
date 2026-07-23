@@ -337,6 +337,54 @@
   </dialog>
 
   <dialog
+    id="outfitPurchaseDialog"
+    class="pixel-dialog"
+    aria-labelledby="outfitPurchaseHeading"
+    aria-describedby="outfitPurchaseDescription outfitPurchaseWarning"
+  >
+    <div class="dialog-content outfit-purchase-dialog-content">
+      <button
+        class="dialog-icon-close"
+        type="button"
+        aria-label="우주복 구매 확인 닫기"
+        data-close-dialog="outfitPurchaseDialog"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M5 5 19 19M19 5 5 19"></path>
+        </svg>
+      </button>
+      <p class="eyebrow">HIGH VALUE PURCHASE</p>
+      <h2 id="outfitPurchaseHeading">우주복 구매 확인</h2>
+      <p id="outfitPurchaseDescription" class="outfit-purchase-description">
+        <strong id="outfitPurchaseName">우주복</strong>을 구매하시겠습니까? 구매 즉시 광석이 차감되고 모든 캐릭터가 함께 사용할 수 있습니다.
+      </p>
+
+      <dl class="outfit-purchase-summary" aria-label="구매 금액 확인">
+        <div>
+          <dt>구매 가격</dt>
+          <dd id="outfitPurchasePrice">12억 광석</dd>
+        </div>
+        <div>
+          <dt>현재 보유</dt>
+          <dd id="outfitPurchaseBalance">0 광석</dd>
+        </div>
+        <div>
+          <dt>구매 후 잔액</dt>
+          <dd id="outfitPurchaseRemaining">0 광석</dd>
+        </div>
+      </dl>
+
+      <p id="outfitPurchaseWarning" class="outfit-purchase-warning" role="note">
+        우주복은 능력치 보너스가 없는 꾸미기 복장입니다. 구매 후에는 되팔 수 없습니다.
+      </p>
+      <div class="dialog-actions">
+        <button id="confirmOutfitPurchaseButton" class="pixel-button pixel-button--primary" type="button">12억 광석으로 구매</button>
+        <button class="pixel-button dialog-close" type="button" data-close-dialog="outfitPurchaseDialog">취소</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog
     id="mineralCatalogDialog"
     class="pixel-dialog pixel-dialog--feature"
     aria-labelledby="mineralCatalogHeading"
@@ -391,7 +439,7 @@
           <h2 id="achievementsHeading">업적 기록</h2>
           <p class="feature-dialog-description">채굴하며 달성한 기록과 해금 시각을 확인합니다.</p>
         </div>
-        <span id="achievementCount" class="section-badge">0 / 13</span>
+        <span id="achievementCount" class="section-badge">0 / 15</span>
       </div>
       <div id="achievementList" class="achievement-grid"></div>
       <div class="dialog-actions feature-dialog-actions">
@@ -470,6 +518,34 @@
           <input id="musicToggle" type="checkbox" checked>
         </label>
 
+        <label class="toggle-row" for="soundEffectsToggle">
+          <span>
+            <strong>채굴 효과음</strong>
+            <small id="soundEffectsStatus" aria-live="polite">켜짐 · 음량 40% · 광물별 4개 변형</small>
+          </span>
+          <input id="soundEffectsToggle" type="checkbox" checked>
+        </label>
+
+        <label class="volume-row" for="soundEffectsVolume">
+          <span>
+            <strong>효과음 음량</strong>
+            <small>빠른 연속 클릭에도 적용되며 음소거 상태와 함께 저장됩니다.</small>
+          </span>
+          <span class="volume-control">
+            <input
+              id="soundEffectsVolume"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value="40"
+              aria-label="채굴 효과음 음량"
+              aria-valuetext="40%"
+            >
+            <output id="soundEffectsVolumeValue" for="soundEffectsVolume">40%</output>
+          </span>
+        </label>
+
         <label class="toggle-row" for="reducedMotionToggle">
           <span>
             <strong>모션 감소</strong>
@@ -518,7 +594,7 @@
       <h2>세이브 코드 불러오기</h2>
       <p id="importDialogDescription">검증이 완료된 코드만 현재 진행도를 대체합니다. 불러오기 전에 현재 세이브를 내보내는 것을 권장합니다.</p>
       <label class="field-label" for="importCode">세이브 코드 붙여넣기</label>
-      <textarea id="importCode" class="save-code-field" rows="8" spellcheck="false" autocomplete="off" placeholder="PIXELMINE-V6:..."></textarea>
+      <textarea id="importCode" class="save-code-field" rows="8" spellcheck="false" autocomplete="off" placeholder="PIXELMINE-V7:..."></textarea>
       <p id="importStatus" class="dialog-status" aria-live="polite"></p>
       <div class="dialog-actions">
         <button id="confirmImportButton" class="pixel-button pixel-button--primary" type="button">검증 후 불러오기</button>

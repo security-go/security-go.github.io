@@ -18,6 +18,7 @@ const MINERAL_CATALOG_SCREENSHOT_PATH = "/tmp/pixel-mine-minerals.png";
 const ACHIEVEMENTS_SCREENSHOT_PATH = "/tmp/pixel-mine-achievements.png";
 const SAVE_MENU_SCREENSHOT_PATH = "/tmp/pixel-mine-save-menu.png";
 const OUTFIT_SHOP_SCREENSHOT_PATH = "/tmp/pixel-mine-outfit-shop.png";
+const SPACE_OUTFIT_CONFIRM_SCREENSHOT_PATH = "/tmp/pixel-mine-space-outfit-confirm.png";
 const TOAST_SCREENSHOT_PATH = "/tmp/pixel-mine-toast-mobile.png";
 const CHARACTER_DEMO_SCREENSHOT_PATH = "/tmp/pixel-mine-character-demo.png";
 const DEBUG_BASE = `http://${DEBUG_HOST}:${DEBUG_PORT}`;
@@ -326,26 +327,38 @@ async function run() {
         storageUsage: document.getElementById('storageUsage').textContent,
         saveSize: document.getElementById('saveSize').textContent,
         musicEnabled: save.data.settings.musicEnabled,
+        soundEffectsEnabled: save.data.settings.soundEffectsEnabled,
+        soundEffectsVolume: save.data.settings.soundEffectsVolume,
         selectedOreId: save.data.selectedOreId,
         cosmetics: save.data.cosmetics,
         musicChecked: document.getElementById('musicToggle').checked,
         musicStatus: document.getElementById('musicStatus').textContent,
-        musicPaused: audio.paused
+        musicPaused: audio.paused,
+        soundEffectsChecked: document.getElementById('soundEffectsToggle').checked,
+        soundEffectsVolumeValue: document.getElementById('soundEffectsVolume').value,
+        soundEffectsVolumeOutput: document.getElementById('soundEffectsVolumeValue').textContent,
+        soundEffectsSupported: document.getElementById('soundEffectsStatus').dataset.supported
       };
     })()`);
     assert(
-      started.version === 6 &&
+      started.version === 7 &&
         started.label === "픽셀 광산" &&
         started.selectedOreId === "coal" &&
+        started.soundEffectsEnabled === true &&
+        started.soundEffectsVolume === 0.4 &&
+        started.soundEffectsChecked === true &&
+        started.soundEffectsVolumeValue === "40" &&
+        started.soundEffectsVolumeOutput === "40%" &&
+        started.soundEffectsSupported === "true" &&
         started.cosmetics.characterId === "female" &&
         started.cosmetics.outfitId === "workwear" &&
         started.cosmetics.selectionConfirmed === true &&
         JSON.stringify(started.cosmetics.ownedOutfitIds) === JSON.stringify(["workwear"]),
-      "v6 로컬 세이브 또는 첫 캐릭터 선택 결과가 생성되지 않았습니다.",
+      "v7 로컬 세이브, 효과음 기본값 또는 첫 캐릭터 선택 결과가 생성되지 않았습니다.",
     );
-    assert(started.upgrades === 7 && started.achievements === 13, "업그레이드 또는 업적 개수가 다릅니다.");
+    assert(started.upgrades === 7 && started.achievements === 15, "업그레이드 또는 업적 개수가 다릅니다.");
     assert(started.storageStatus.includes("사용 가능"), "HTTP localStorage가 사용 가능 상태가 아닙니다.");
-    pass("게임 시작 후 여자·남자·드워프 중 하나를 필수 선택하고 v6 세이브와 기본 광부복을 초기화한다");
+    pass("게임 시작 후 여자·남자·드워프 중 하나를 필수 선택하고 효과음 40%인 v7 세이브를 초기화한다");
     assert(started.persistenceStatus.includes("승인") || started.persistenceStatus.includes("삭제 가능"), "저장 보호 결과가 표시되지 않았습니다.");
     assert(started.storageUsage.includes("Origin") && started.saveSize.includes("UTF-8 JSON"), "Origin 사용량과 세이브 크기가 구분되지 않았습니다.");
     pass("저장 보호 결과, Origin 예상 사용량, 세이브 UTF-8 크기를 구분해 표시한다");
@@ -429,7 +442,7 @@ async function run() {
         characterSelection.saved.selectionConfirmed === true,
       `캐릭터 선택 또는 저장 결과가 올바르지 않습니다: ${JSON.stringify(characterSelection)}`,
     );
-    pass("광부 선택 메뉴는 캐릭터 3종과 보유 복장만 제공하고 선택 결과를 v6 세이브에 보존한다");
+    pass("광부 선택 메뉴는 캐릭터 3종과 보유 복장만 제공하고 선택 결과를 v7 세이브에 보존한다");
 
     await waitFor(page, "document.getElementById('minerActor').dataset.facing === 'left' && document.getElementById('minerActor').dataset.pose === 'side'", 15_000);
     const leftMovementStart = await page.evaluate("Number(document.getElementById('minerActor').dataset.x)");
@@ -582,7 +595,7 @@ async function run() {
       cards: document.querySelectorAll('#achievementsDialog .achievement-card').length
     }))()`);
     assert(
-      achievementMenu.expanded === "true" && achievementMenu.badge === "0" && achievementMenu.count === "0 / 13" && achievementMenu.cards === 13,
+      achievementMenu.expanded === "true" && achievementMenu.badge === "0" && achievementMenu.count === "0 / 15" && achievementMenu.cards === 15,
       `업적 팝업 내용이 올바르지 않습니다: ${JSON.stringify(achievementMenu)}`,
     );
     const achievementScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
@@ -603,11 +616,30 @@ async function run() {
         hasManualSave: dialog.contains(document.getElementById('manualSaveButton')),
         hasStorageDetails: dialog.contains(document.querySelector('.storage-details')),
         hasMusicToggle: dialog.contains(document.getElementById('musicToggle')),
-        musicStatus: document.getElementById('musicStatus').textContent
+        musicStatus: document.getElementById('musicStatus').textContent,
+        hasSoundEffectsToggle: dialog.contains(document.getElementById('soundEffectsToggle')),
+        hasSoundEffectsVolume: dialog.contains(document.getElementById('soundEffectsVolume')),
+        soundEffectsChecked: document.getElementById('soundEffectsToggle').checked,
+        soundEffectsVolume: document.getElementById('soundEffectsVolume').value,
+        soundEffectsOutput: document.getElementById('soundEffectsVolumeValue').textContent,
+        soundEffectsStatus: document.getElementById('soundEffectsStatus').textContent
       };
     })()`);
     assert(
-      saveMenu.expanded === "true" && saveMenu.hasExport && saveMenu.hasImport && saveMenu.hasReset && saveMenu.hasManualSave && saveMenu.hasStorageDetails && saveMenu.hasMusicToggle && saveMenu.musicStatus.includes("재생 중"),
+      saveMenu.expanded === "true" &&
+        saveMenu.hasExport &&
+        saveMenu.hasImport &&
+        saveMenu.hasReset &&
+        saveMenu.hasManualSave &&
+        saveMenu.hasStorageDetails &&
+        saveMenu.hasMusicToggle &&
+        saveMenu.musicStatus.includes("재생 중") &&
+        saveMenu.hasSoundEffectsToggle &&
+        saveMenu.hasSoundEffectsVolume &&
+        saveMenu.soundEffectsChecked &&
+        saveMenu.soundEffectsVolume === "40" &&
+        saveMenu.soundEffectsOutput === "40%" &&
+        saveMenu.soundEffectsStatus.includes("광물별 4개 변형"),
       `저장 팝업 내용이 올바르지 않습니다: ${JSON.stringify(saveMenu)}`,
     );
     const saveMenuScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
@@ -642,18 +674,104 @@ async function run() {
     assert(!musicOn.paused && musicOn.checked && musicOn.status.includes("재생 중"), `배경음악 켜기 상태가 올바르지 않습니다: ${JSON.stringify(musicOn)}`);
     pass("저장 팝업에서 배경음악을 끄고 다시 켜며 선택을 로컬 세이브에 보존한다");
 
+    await page.evaluate(`(() => {
+      const volume = document.getElementById('soundEffectsVolume');
+      volume.value = '25';
+      volume.dispatchEvent(new Event('input', { bubbles: true }));
+      const toggle = document.getElementById('soundEffectsToggle');
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(page, "JSON.parse(localStorage.getItem('pixelMine.save')).data.settings.soundEffectsEnabled === false && JSON.parse(localStorage.getItem('pixelMine.save')).data.settings.soundEffectsVolume === 0.25", 8_000);
+    const soundEffectsOff = await page.evaluate(`(() => ({
+      checked: document.getElementById('soundEffectsToggle').checked,
+      volume: document.getElementById('soundEffectsVolume').value,
+      output: document.getElementById('soundEffectsVolumeValue').textContent,
+      volumeDisabled: document.getElementById('soundEffectsVolume').disabled,
+      status: document.getElementById('soundEffectsStatus').textContent
+    }))()`);
+    assert(
+      !soundEffectsOff.checked &&
+        soundEffectsOff.volume === "25" &&
+        soundEffectsOff.output === "25%" &&
+        soundEffectsOff.volumeDisabled &&
+        soundEffectsOff.status.includes("꺼짐"),
+      `채굴 효과음 음소거 상태가 올바르지 않습니다: ${JSON.stringify(soundEffectsOff)}`,
+    );
+
+    await page.evaluate(`(() => {
+      const toggle = document.getElementById('soundEffectsToggle');
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(page, "JSON.parse(localStorage.getItem('pixelMine.save')).data.settings.soundEffectsEnabled === true && document.getElementById('soundEffectsVolume').disabled === false", 8_000);
+    const soundEffectsOn = await page.evaluate(`(() => ({
+      checked: document.getElementById('soundEffectsToggle').checked,
+      volume: document.getElementById('soundEffectsVolume').value,
+      output: document.getElementById('soundEffectsVolumeValue').textContent,
+      status: document.getElementById('soundEffectsStatus').textContent
+    }))()`);
+    assert(
+      soundEffectsOn.checked &&
+        soundEffectsOn.volume === "25" &&
+        soundEffectsOn.output === "25%" &&
+        soundEffectsOn.status.includes("음량 25%"),
+      `채굴 효과음 복원 상태가 올바르지 않습니다: ${JSON.stringify(soundEffectsOn)}`,
+    );
+    pass("저장 팝업에서 채굴 효과음을 음소거하고 음량 25% 설정을 v7 세이브에 보존한다");
+
     await page.evaluate("document.querySelector('[data-close-dialog=\"saveManagementDialog\"]').click(); true");
     await waitFor(page, "!document.getElementById('saveManagementDialog').open && document.getElementById('saveMenuButton').getAttribute('aria-expanded') === 'false'");
     pass("저장 아이콘으로 저장 상태·백업·복원·초기화 기능 팝업을 열고 닫는다");
 
-    await page.evaluate(`(() => {
+    const coalMiningSound = await page.evaluate(`(() => {
       const mine = document.getElementById('mineButton');
-      for (let index = 0; index < 10; index += 1) mine.click();
+      const variants = [];
+      for (let index = 0; index < 10; index += 1) {
+        mine.click();
+        variants.push(Number(mine.dataset.sfxVariant));
+      }
       document.querySelector('.upgrade-buy').click();
-      for (let index = 0; index < 3; index += 1) mine.click();
+      for (let index = 0; index < 3; index += 1) {
+        mine.click();
+        variants.push(Number(mine.dataset.sfxVariant));
+      }
       document.getElementById('manualSaveButton').click();
-      return true;
+      return {
+        variants,
+        bufferCount: Number(mine.dataset.sfxBufferCount),
+        bufferGenerationCount: Number(mine.dataset.sfxBufferGenerationCount),
+        playCount: Number(mine.dataset.sfxPlayCount),
+        activeVoices: Number(mine.dataset.sfxActiveVoices),
+        ore: mine.dataset.sfxOre,
+        durationMs: Number(mine.dataset.sfxDurationMs),
+        playbackRate: Number(mine.dataset.sfxPlaybackRate),
+        brightness: Number(mine.dataset.sfxBrightness),
+        volume: Number(mine.dataset.sfxVolume)
+      };
     })()`);
+    assert(
+      coalMiningSound.variants.length === 13 &&
+        coalMiningSound.variants.every((variant) => Number.isInteger(variant) && variant >= 1 && variant <= 4) &&
+        coalMiningSound.variants.every((variant, index, values) => index === 0 || variant !== values[index - 1]) &&
+        new Set(coalMiningSound.variants).size >= 2 &&
+        coalMiningSound.bufferCount === 4 &&
+        coalMiningSound.bufferGenerationCount === 1 &&
+        coalMiningSound.playCount === 13 &&
+        coalMiningSound.activeVoices <= 6 &&
+        coalMiningSound.ore === "coal" &&
+        coalMiningSound.durationMs >= 80 &&
+        coalMiningSound.durationMs <= 140 &&
+        coalMiningSound.playbackRate > 0.94 &&
+        coalMiningSound.playbackRate < 0.99 &&
+        coalMiningSound.brightness >= 1_700 &&
+        coalMiningSound.brightness <= 1_900 &&
+        coalMiningSound.volume === 0.25,
+      `석탄 채굴 효과음 합성 또는 버퍼 재사용 결과가 올바르지 않습니다: ${JSON.stringify(coalMiningSound)}`,
+    );
+    pass("80~140ms 채굴음 4개를 한 번 합성해 재사용하고 연속 클릭마다 겹치지 않게 무작위 재생한다");
     await delay(100);
     await waitFor(page, "document.getElementById('minerActor').dataset.pose === 'mining' && document.getElementById('minerCanvas').dataset.pose === 'mining'", 2_000);
     const miningPose = await page.evaluate(`(() => ({
@@ -732,24 +850,26 @@ async function run() {
     await page.evaluate("document.getElementById('saveMenuButton').click(); true");
     await waitFor(page, "document.getElementById('saveManagementDialog').open");
     await page.evaluate("document.getElementById('exportButton').click(); true");
-    await waitFor(page, "document.getElementById('saveManagementDialog').open && document.getElementById('exportDialog').open && document.getElementById('exportCode').value.startsWith('PIXELMINE-V6:')");
+    await waitFor(page, "document.getElementById('saveManagementDialog').open && document.getElementById('exportDialog').open && document.getElementById('exportCode').value.startsWith('PIXELMINE-V7:')");
     const saveCode = await page.evaluate("document.getElementById('exportCode').value");
-    const decoded = JSON.parse(Buffer.from(saveCode.slice("PIXELMINE-V6:".length), "base64").toString("utf8"));
+    const decoded = JSON.parse(Buffer.from(saveCode.slice("PIXELMINE-V7:".length), "base64").toString("utf8"));
     assert(
-      decoded.version === 6 &&
+      decoded.version === 7 &&
         decoded.meta.label === "픽셀 광산" &&
+        decoded.data.settings.soundEffectsEnabled === true &&
+        decoded.data.settings.soundEffectsVolume === 0.25 &&
         decoded.data.cosmetics.characterId === "dwarf" &&
         decoded.data.cosmetics.outfitId === "workwear" &&
         decoded.data.cosmetics.selectionConfirmed === true &&
         JSON.stringify(decoded.data.cosmetics.ownedOutfitIds) === JSON.stringify(["workwear"]),
-      "UTF-8 세이브 코드가 한글 메타데이터 또는 캐릭터 선택을 보존하지 못했습니다.",
+      "UTF-8 세이브 코드가 한글 메타데이터, 효과음 설정 또는 캐릭터 선택을 보존하지 못했습니다.",
     );
     pass("UTF-8 JSON 세이브 코드를 Base64로 내보내고 한글을 보존한다");
 
     await page.evaluate(`(() => {
       document.getElementById('exportDialog').close();
       document.getElementById('importOpenButton').click();
-      document.getElementById('importCode').value = 'PIXELMINE-V7:QUFBQQ==';
+      document.getElementById('importCode').value = 'PIXELMINE-V8:QUFBQQ==';
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
@@ -793,13 +913,13 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 6");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 7");
     const migratedLegacy = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
       return { version: save.version, currency: save.data.currency, clicks: save.data.totalClicks, level: save.data.upgrades.worn_pickaxe, selectedOreId: save.data.selectedOreId, cosmetics: save.data.cosmetics };
     })()`);
     assert(
-      migratedLegacy.version === 6 &&
+      migratedLegacy.version === 7 &&
         migratedLegacy.currency === 42 &&
         migratedLegacy.clicks === 7 &&
         migratedLegacy.level === 2 &&
@@ -810,7 +930,7 @@ async function run() {
         JSON.stringify(migratedLegacy.cosmetics.ownedOutfitIds) === JSON.stringify(["workwear"]),
       `v0 저장 마이그레이션 결과가 올바르지 않습니다: ${JSON.stringify(migratedLegacy)}`,
     );
-    pass("v0 레거시 저장을 v6 스키마의 남자 광부·기본 광부복으로 복원한다");
+    pass("v0 레거시 저장을 v7 스키마의 남자 광부·기본 광부복으로 복원한다");
 
     const legacyV1Payload = JSON.parse(JSON.stringify(decoded));
     legacyV1Payload.version = 1;
@@ -824,13 +944,13 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 6");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 7");
     const migratedV1 = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
       return { version: save.version, milestone: save.data.upgrades.ore_milestone, selectedOreId: save.data.selectedOreId, ore: document.getElementById('mineSection').dataset.ore, cosmetics: save.data.cosmetics };
     })()`);
     assert(
-      migratedV1.version === 6 &&
+      migratedV1.version === 7 &&
         migratedV1.milestone === 0 &&
         migratedV1.selectedOreId === "coal" &&
         migratedV1.ore === "coal" &&
@@ -840,7 +960,7 @@ async function run() {
         JSON.stringify(migratedV1.cosmetics.ownedOutfitIds) === JSON.stringify(["workwear"]),
       `v1 광맥 진행도 기본값 마이그레이션이 올바르지 않습니다: ${JSON.stringify(migratedV1)}`,
     );
-    pass("기존 v1 세이브에 광맥·남자 광부 기본값을 보완해 v6로 자동 이관한다");
+    pass("기존 v1 세이브에 광맥·남자 광부 기본값을 보완해 v7로 자동 이관한다");
 
     const legacyV2Payload = JSON.parse(JSON.stringify(decoded));
     legacyV2Payload.version = 2;
@@ -854,13 +974,13 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 6");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 7");
     const migratedV2 = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
       return { version: save.version, milestone: save.data.upgrades.ore_milestone, selectedOreId: save.data.selectedOreId, ore: document.getElementById('mineSection').dataset.ore, cosmetics: save.data.cosmetics };
     })()`);
     assert(
-      migratedV2.version === 6 &&
+      migratedV2.version === 7 &&
         migratedV2.milestone === 3 &&
         migratedV2.selectedOreId === "gold" &&
         migratedV2.ore === "gold" &&
@@ -870,7 +990,7 @@ async function run() {
         JSON.stringify(migratedV2.cosmetics.ownedOutfitIds) === JSON.stringify(["workwear"]),
       `v2 선택 광맥 마이그레이션이 올바르지 않습니다: ${JSON.stringify(migratedV2)}`,
     );
-    pass("기존 v2 세이브는 최고 발견 광맥과 남자 광부를 선택한 v6 상태로 자동 이관한다");
+    pass("기존 v2 세이브는 최고 발견 광맥과 남자 광부를 선택한 v7 상태로 자동 이관한다");
 
     const legacyV3Payload = JSON.parse(JSON.stringify(decoded));
     legacyV3Payload.version = 3;
@@ -882,7 +1002,7 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 6");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 7");
     const migratedV3 = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
       return {
@@ -893,7 +1013,7 @@ async function run() {
       };
     })()`);
     assert(
-      migratedV3.version === 6 &&
+      migratedV3.version === 7 &&
         migratedV3.cosmetics.characterId === "male" &&
         migratedV3.cosmetics.outfitId === "workwear" &&
         migratedV3.cosmetics.selectionConfirmed === true &&
@@ -902,7 +1022,7 @@ async function run() {
         migratedV3.actorOutfit === "workwear",
       `v3 캐릭터 기본값 마이그레이션이 올바르지 않습니다: ${JSON.stringify(migratedV3)}`,
     );
-    pass("기존 v3 세이브에 남자 광부·기본 광부복을 보완해 v6로 자동 이관한다");
+    pass("기존 v3 세이브에 남자 광부·기본 광부복을 보완해 v7로 자동 이관한다");
 
     const legacyV4DefaultPayload = JSON.parse(JSON.stringify(decoded));
     legacyV4DefaultPayload.version = 4;
@@ -914,7 +1034,7 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 6");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 7");
     const migratedV4Default = await page.evaluate("JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics");
 
     const legacyV4CustomPayload = JSON.parse(JSON.stringify(decoded));
@@ -927,7 +1047,7 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 6");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 7");
     const migratedV4Custom = await page.evaluate("JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics");
     assert(
       migratedV4Default.characterId === "male" &&
@@ -952,7 +1072,7 @@ async function run() {
       document.getElementById('confirmImportButton').click();
       return true;
     })()`);
-    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 6");
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 7");
     const migratedV5 = await page.evaluate("JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics");
     assert(
       migratedV5.characterId === "dwarf" &&
@@ -961,7 +1081,39 @@ async function run() {
         JSON.stringify(migratedV5.ownedOutfitIds) === JSON.stringify(["workwear"]),
       `v5 보유 복장 마이그레이션이 올바르지 않습니다: ${JSON.stringify(migratedV5)}`,
     );
-    pass("기존 v5 세이브에 기본 광부복 소유권을 보완해 v6로 자동 이관한다");
+    pass("기존 v5 세이브에 기본 광부복 소유권을 보완해 v7로 자동 이관한다");
+
+    const legacyV6Payload = JSON.parse(JSON.stringify(decoded));
+    legacyV6Payload.version = 6;
+    delete legacyV6Payload.data.settings.soundEffectsEnabled;
+    delete legacyV6Payload.data.settings.soundEffectsVolume;
+    const legacyV6Code = `PIXELMINE-V6:${Buffer.from(JSON.stringify(legacyV6Payload), "utf8").toString("base64")}`;
+    await page.evaluate(`(() => {
+      document.getElementById('importOpenButton').click();
+      document.getElementById('importCode').value = ${JSON.stringify(legacyV6Code)};
+      document.getElementById('confirmImportButton').click();
+      return true;
+    })()`);
+    await waitFor(page, "!document.getElementById('importDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).version === 7");
+    const migratedV6 = await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      return {
+        version: save.version,
+        soundEffectsEnabled: save.data.settings.soundEffectsEnabled,
+        soundEffectsVolume: save.data.settings.soundEffectsVolume,
+        toggleChecked: document.getElementById('soundEffectsToggle').checked,
+        volumeValue: document.getElementById('soundEffectsVolume').value
+      };
+    })()`);
+    assert(
+      migratedV6.version === 7 &&
+        migratedV6.soundEffectsEnabled === true &&
+        migratedV6.soundEffectsVolume === 0.4 &&
+        migratedV6.toggleChecked === true &&
+        migratedV6.volumeValue === "40",
+      `v6 효과음 설정 마이그레이션이 올바르지 않습니다: ${JSON.stringify(migratedV6)}`,
+    );
+    pass("기존 v6 세이브에 채굴 효과음 켜짐·음량 40%를 보완해 v7로 자동 이관한다");
 
     await page.evaluate(`(() => {
       document.getElementById('importOpenButton').click();
@@ -991,6 +1143,8 @@ async function run() {
       level: JSON.parse(localStorage.getItem('pixelMine.save')).data.upgrades.worn_pickaxe,
       clicks: JSON.parse(localStorage.getItem('pixelMine.save')).data.totalClicks,
       musicEnabled: JSON.parse(localStorage.getItem('pixelMine.save')).data.settings.musicEnabled,
+      soundEffectsEnabled: JSON.parse(localStorage.getItem('pixelMine.save')).data.settings.soundEffectsEnabled,
+      soundEffectsVolume: JSON.parse(localStorage.getItem('pixelMine.save')).data.settings.soundEffectsVolume,
       cosmetics: JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics,
       actorCharacter: document.getElementById('minerActor').dataset.character,
       actorOutfit: document.getElementById('minerActor').dataset.outfit,
@@ -1000,6 +1154,8 @@ async function run() {
       resumed.level === 1 &&
         resumed.clicks === 13 &&
         resumed.musicEnabled === true &&
+        resumed.soundEffectsEnabled === true &&
+        resumed.soundEffectsVolume === 0.25 &&
         resumed.cosmetics.characterId === "dwarf" &&
         resumed.cosmetics.outfitId === "workwear" &&
         resumed.cosmetics.selectionConfirmed === true &&
@@ -1159,7 +1315,7 @@ async function run() {
       `발견 광맥 재선택 결과가 올바르지 않습니다: ${JSON.stringify(reselectedCoal)}`,
     );
     await page.evaluate("document.querySelector('[data-close-dialog=\"mineralCatalogDialog\"]').click(); true");
-    pass("석탄 외형을 다시 선택해도 브론즈 클릭·자동 생산 개척 배율을 유지하고 v6 세이브에 보존한다");
+    pass("석탄 외형을 다시 선택해도 브론즈 클릭·자동 생산 개척 배율을 유지하고 v7 세이브에 보존한다");
 
     await page.evaluate("document.querySelector('[data-purchase-mode=\"max\"]').click(); true");
     const maxMilestoneOffer = await page.evaluate(`(() => ({
@@ -1206,15 +1362,96 @@ async function run() {
     );
     pass("최대 구매로 남은 4단계를 개척해 다이아 배율을 적용하고 광물 발견 업적 5종을 해금한다");
 
+    const diamondMiningSound = await page.evaluate(`(() => {
+      const mine = document.getElementById('mineButton');
+      const before = Number(mine.dataset.sfxPlayCount ?? 0);
+      mine.click();
+      return {
+        before,
+        after: Number(mine.dataset.sfxPlayCount),
+        bufferCount: Number(mine.dataset.sfxBufferCount),
+        bufferGenerationCount: Number(mine.dataset.sfxBufferGenerationCount),
+        ore: mine.dataset.sfxOre,
+        durationMs: Number(mine.dataset.sfxDurationMs),
+        playbackRate: Number(mine.dataset.sfxPlaybackRate),
+        brightness: Number(mine.dataset.sfxBrightness)
+      };
+    })()`);
+    assert(
+      diamondMiningSound.after === diamondMiningSound.before + 1 &&
+        diamondMiningSound.bufferCount === 4 &&
+        diamondMiningSound.bufferGenerationCount === 1 &&
+        diamondMiningSound.ore === "diamond" &&
+        diamondMiningSound.durationMs >= 80 &&
+        diamondMiningSound.durationMs <= 140 &&
+        diamondMiningSound.playbackRate > coalMiningSound.playbackRate &&
+        diamondMiningSound.brightness > coalMiningSound.brightness * 2,
+      `다이아 광물별 효과음 프로필이 적용되지 않았습니다: ${JSON.stringify({ coalMiningSound, diamondMiningSound })}`,
+    );
+    pass("석탄부터 다이아까지 광물 단계에 따라 채굴음 피치와 밝기를 높여 재생한다");
+
     await page.evaluate("document.getElementById('characterMenuButton').click(); true");
     await waitFor(page, "document.getElementById('characterDialog').open && document.querySelector('[data-outfit-id=\"casual\"]').dataset.state === 'available' && document.querySelector('[data-outfit-id=\"space\"]').dataset.state === 'available'");
     const outfitCurrencyBefore = await page.evaluate("JSON.parse(localStorage.getItem('pixelMine.save')).data.currency");
     const outfitShopScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
     await writeFile(OUTFIT_SHOP_SCREENSHOT_PATH, Buffer.from(outfitShopScreenshot.data, "base64"));
     await page.evaluate("document.querySelector('[data-outfit-id=\"casual\"] .outfit-buy-button').click(); true");
-    await waitFor(page, "JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics.ownedOutfitIds.includes('casual')");
+    await waitFor(page, "JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics.ownedOutfitIds.includes('casual') && JSON.parse(localStorage.getItem('pixelMine.save')).data.unlockedAchievements.buy_casual_outfit > 0");
+    const currencyBeforeSpaceConfirmation = await page.evaluate("JSON.parse(localStorage.getItem('pixelMine.save')).data.currency");
     await page.evaluate("document.querySelector('[data-outfit-id=\"space\"] .outfit-buy-button').click(); true");
-    await waitFor(page, "JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics.ownedOutfitIds.includes('space') && document.getElementById('gameOutfitSelect').value === 'space'");
+    await waitFor(page, "document.getElementById('outfitPurchaseDialog').open");
+    const spaceConfirmation = await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      return {
+        characterDialogOpen: document.getElementById('characterDialog').open,
+        purchaseDialogOpen: document.getElementById('outfitPurchaseDialog').open,
+        ownedBeforeConfirm: save.data.cosmetics.ownedOutfitIds.includes('space'),
+        heading: document.getElementById('outfitPurchaseHeading').textContent.trim(),
+        price: document.getElementById('outfitPurchasePrice').textContent.trim(),
+        priceExact: document.getElementById('outfitPurchasePrice').title,
+        balance: document.getElementById('outfitPurchaseBalance').textContent.trim(),
+        remaining: document.getElementById('outfitPurchaseRemaining').textContent.trim(),
+        confirmLabel: document.getElementById('confirmOutfitPurchaseButton').textContent.trim(),
+        warning: document.getElementById('outfitPurchaseWarning').textContent.replace(/\s+/g, ' ').trim()
+      };
+    })()`);
+    assert(
+      spaceConfirmation.characterDialogOpen &&
+        spaceConfirmation.purchaseDialogOpen &&
+        !spaceConfirmation.ownedBeforeConfirm &&
+        spaceConfirmation.heading === "우주복 구매 확인" &&
+        spaceConfirmation.price === "12억 광석" &&
+        spaceConfirmation.priceExact === "1,200,000,000 광석" &&
+        spaceConfirmation.balance.endsWith("광석") &&
+        spaceConfirmation.remaining.endsWith("광석") &&
+        spaceConfirmation.confirmLabel === "12억 광석으로 구매" &&
+        spaceConfirmation.warning.includes("능력치 보너스가 없는 꾸미기 복장") &&
+        spaceConfirmation.warning.includes("되팔 수 없습니다"),
+      `우주복 구매 확인 팝업 내용이 올바르지 않습니다: ${JSON.stringify(spaceConfirmation)}`,
+    );
+    const spaceConfirmationScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(SPACE_OUTFIT_CONFIRM_SCREENSHOT_PATH, Buffer.from(spaceConfirmationScreenshot.data, "base64"));
+    await page.evaluate("document.querySelector('#outfitPurchaseDialog .dialog-close').click(); true");
+    await waitFor(page, "!document.getElementById('outfitPurchaseDialog').open");
+    const cancelledSpacePurchase = await page.evaluate(`(() => {
+      const save = JSON.parse(localStorage.getItem('pixelMine.save'));
+      return {
+        currency: save.data.currency,
+        owned: save.data.cosmetics.ownedOutfitIds.includes('space'),
+        characterDialogOpen: document.getElementById('characterDialog').open
+      };
+    })()`);
+    assert(
+      cancelledSpacePurchase.currency >= currencyBeforeSpaceConfirmation &&
+        !cancelledSpacePurchase.owned &&
+        cancelledSpacePurchase.characterDialogOpen,
+      `우주복 구매 취소가 진행도를 변경했습니다: ${JSON.stringify({ currencyBeforeSpaceConfirmation, cancelledSpacePurchase })}`,
+    );
+    await page.evaluate("document.querySelector('[data-outfit-id=\"space\"] .outfit-buy-button').click(); true");
+    await waitFor(page, "document.getElementById('outfitPurchaseDialog').open");
+    await page.evaluate("document.getElementById('confirmOutfitPurchaseButton').click(); true");
+    await waitFor(page, "!document.getElementById('outfitPurchaseDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics.ownedOutfitIds.includes('space') && JSON.parse(localStorage.getItem('pixelMine.save')).data.unlockedAchievements.buy_space_outfit > 0 && document.getElementById('gameOutfitSelect').value === 'space'");
+    pass("우주복 12억 구매는 가격·보유량·구매 후 잔액 확인을 거치며 취소 시 광석을 차감하지 않는다");
     await page.evaluate("document.getElementById('applyCharacterButton').click(); true");
     await waitFor(page, "!document.getElementById('characterDialog').open && document.getElementById('minerCanvas').dataset.outfit === 'space' && JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics.outfitId === 'space'", 8_000);
     const purchasedOutfits = await page.evaluate(`(() => {
@@ -1228,7 +1465,9 @@ async function run() {
         selectDisabled: document.getElementById('gameOutfitSelect').disabled,
         actorOutfit: document.getElementById('minerActor').dataset.outfit,
         casualState: document.querySelector('[data-outfit-id="casual"]').dataset.state,
-        spaceState: document.querySelector('[data-outfit-id="space"]').dataset.state
+        spaceState: document.querySelector('[data-outfit-id="space"]').dataset.state,
+        casualAchievement: save.data.unlockedAchievements.buy_casual_outfit,
+        spaceAchievement: save.data.unlockedAchievements.buy_space_outfit
       };
     })()`);
     assert(
@@ -1240,10 +1479,12 @@ async function run() {
         !purchasedOutfits.selectDisabled &&
         purchasedOutfits.actorOutfit === "space" &&
         purchasedOutfits.casualState === "owned" &&
-        purchasedOutfits.spaceState === "current",
+        purchasedOutfits.spaceState === "current" &&
+        purchasedOutfits.casualAchievement > 0 &&
+        purchasedOutfits.spaceAchievement > 0,
       `복장 구매·선택·저장 결과가 올바르지 않습니다: ${JSON.stringify({ outfitCurrencyBefore, purchasedOutfits })}`,
     );
-    pass("철·루비 광맥 조건 이후 캐주얼 1000만·우주복 12억을 한 번만 구매하고 모든 캐릭터에 적용한다");
+    pass("캐주얼·우주복 구매 업적을 해금하고 구매한 복장을 모든 캐릭터에 적용한다");
 
     const bulkLevels = await page.evaluate(`(() => {
       document.querySelector('[data-purchase-mode="ten"]').click();
@@ -1290,6 +1531,7 @@ async function run() {
         currency: save.data.currency,
         levels: Object.values(save.data.upgrades),
         selectedOreId: save.data.selectedOreId,
+        settings: save.data.settings,
         cosmetics: save.data.cosmetics,
         actorCharacter: document.getElementById('minerActor').dataset.character,
         actorOutfit: document.getElementById('minerActor').dataset.outfit,
@@ -1302,6 +1544,8 @@ async function run() {
       resetResult.currency === 0 &&
         resetResult.levels.every((level) => level === 0) &&
         resetResult.selectedOreId === "coal" &&
+        resetResult.settings.soundEffectsEnabled === true &&
+        resetResult.settings.soundEffectsVolume === 0.4 &&
         resetResult.cosmetics.characterId === "male" &&
         resetResult.cosmetics.outfitId === "workwear" &&
         resetResult.cosmetics.selectionConfirmed === true &&
@@ -1326,7 +1570,7 @@ async function run() {
       currentVersion: JSON.parse(localStorage.getItem('pixelMine.save')).version,
       currentCurrency: JSON.parse(localStorage.getItem('pixelMine.save')).data.currency
     }))()`);
-    assert(corrupt.quarantined === "{broken" && corrupt.currentVersion === 6 && corrupt.currentCurrency === 0, "손상 저장 격리 또는 새 게임 폴백에 실패했습니다.");
+    assert(corrupt.quarantined === "{broken" && corrupt.currentVersion === 7 && corrupt.currentCurrency === 0, "손상 저장 격리 또는 새 게임 폴백에 실패했습니다.");
     pass("손상 JSON 원문을 별도 키에 격리하고 유효한 새 게임으로 폴백한다");
 
     await reload(page);
@@ -1428,6 +1672,18 @@ async function run() {
       actionsAboveStats: document.querySelector('.topbar-actions').getBoundingClientRect().bottom <= document.querySelector('.topbar-stats').getBoundingClientRect().top,
       manualSaveInDialog: document.getElementById('saveManagementDialog').contains(document.getElementById('manualSaveButton')),
       characterButtonRight: document.getElementById('characterMenuButton').getBoundingClientRect().right,
+      soundSettings: (() => {
+        const dialog = document.getElementById('saveManagementDialog').getBoundingClientRect();
+        const row = document.querySelector('.volume-row');
+        const rowRect = row.getBoundingClientRect();
+        const controlRect = document.querySelector('.volume-control').getBoundingClientRect();
+        return {
+          direction: getComputedStyle(row).flexDirection,
+          rowInside: rowRect.left >= dialog.left && rowRect.right <= dialog.right,
+          controlInside: controlRect.left >= rowRect.left && controlRect.right <= rowRect.right,
+          rangeUsable: document.getElementById('soundEffectsVolume').getBoundingClientRect().width >= 120
+        };
+      })(),
       actorInsideStage: (() => {
         const stage = document.getElementById('mineStage').getBoundingClientRect();
         const actor = document.getElementById('minerActor').getBoundingClientRect();
@@ -1469,7 +1725,11 @@ async function run() {
         mobileLayout.contentOffset <= 145 &&
         new Set(mobileLayout.statTops).size === 1 &&
         mobileLayout.actionsAboveStats &&
-        mobileLayout.manualSaveInDialog,
+        mobileLayout.manualSaveInDialog &&
+        mobileLayout.soundSettings.direction === "column" &&
+        mobileLayout.soundSettings.rowInside &&
+        mobileLayout.soundSettings.controlInside &&
+        mobileLayout.soundSettings.rangeUsable,
       `모바일 컴팩트 상단 구조가 올바르지 않습니다: ${JSON.stringify(mobileLayout)}`,
     );
     assert(

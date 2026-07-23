@@ -1350,6 +1350,7 @@ select:focus-visible {
 }
 
 .toggle-row,
+.volume-row,
 .confirm-row {
   display: flex;
   align-items: center;
@@ -1366,12 +1367,18 @@ select:focus-visible {
   margin-top: 0;
 }
 
-.toggle-row small {
+.settings-list .volume-row {
+  margin-top: 0;
+}
+
+.toggle-row small,
+.volume-row small {
   display: block;
   color: var(--slate);
 }
 
-.toggle-row small.is-error {
+.toggle-row small.is-error,
+.volume-row small.is-error {
   color: var(--danger);
 }
 
@@ -1381,6 +1388,37 @@ select:focus-visible {
   height: 24px;
   flex: 0 0 auto;
   accent-color: var(--moss);
+}
+
+.volume-control {
+  display: flex;
+  flex: 0 0 min(280px, 42%);
+  align-items: center;
+  gap: 12px;
+}
+
+.volume-control input[type="range"] {
+  width: 100%;
+  min-width: 120px;
+  accent-color: var(--moss);
+  cursor: pointer;
+}
+
+.volume-control input[type="range"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.volume-control output {
+  min-width: 48px;
+  padding: 5px 7px;
+  border: 2px solid var(--ink);
+  color: var(--paper);
+  background: var(--slate);
+  font-family: var(--font-pixel);
+  font-size: 0.48rem;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .game-footer {
@@ -1717,6 +1755,70 @@ select:focus-visible {
   font-family: var(--font-pixel);
   font-size: 0.48rem;
   line-height: 1.5;
+}
+
+.outfit-purchase-dialog-content {
+  position: relative;
+}
+
+.outfit-purchase-dialog-content h2 {
+  padding-right: 52px;
+}
+
+.outfit-purchase-description {
+  color: var(--slate);
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.65;
+}
+
+.outfit-purchase-description strong {
+  color: var(--ink);
+}
+
+.outfit-purchase-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.outfit-purchase-summary > div {
+  min-width: 0;
+  padding: 12px 10px;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  box-shadow: 3px 3px 0 var(--slate);
+}
+
+.outfit-purchase-summary dt {
+  color: var(--slate);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.outfit-purchase-summary dd {
+  margin: 7px 0 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-pixel);
+  font-size: 0.55rem;
+  font-weight: 900;
+  line-height: 1.55;
+}
+
+#outfitPurchaseRemaining {
+  color: var(--moss);
+}
+
+.outfit-purchase-warning {
+  margin-bottom: 0;
+  padding: 12px 14px;
+  border-left: 5px solid var(--gold);
+  color: var(--slate);
+  background: rgba(214, 180, 90, 0.2);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.6;
 }
 
 .character-behavior-note {
@@ -2144,6 +2246,7 @@ body.reduce-motion *::after {
   .achievement-grid,
   .mineral-grid,
   .storage-details,
+  .outfit-purchase-summary,
   .save-actions {
     grid-template-columns: 1fr;
   }
@@ -2209,6 +2312,16 @@ body.reduce-motion *::after {
     width: 100%;
   }
 
+  .volume-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .volume-control {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
   .feature-dialog-content {
     padding: 20px 16px;
   }
@@ -2244,12 +2357,15 @@ body.reduce-motion *::after {
   .purchase-mode-button,
   .utility-menu-button,
   .dialog-icon-close,
+  .volume-row,
+  .volume-control output,
   .mine-stage,
   .upgrade-card,
   .mineral-card,
   .ore-progression-bonus,
   .mineral-bonus,
   .achievement-card,
+  .outfit-purchase-summary > div,
   .storage-details > div {
     border-color: CanvasText;
   }
