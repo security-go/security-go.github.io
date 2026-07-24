@@ -48,10 +48,26 @@
   const MINER_IDLE_FRAME_MS = 210;
   const MINER_WALK_FRAME_MS = 140;
   const MINER_MINING_FRAME_DURATIONS = Object.freeze([90, 110, 110, 170]);
+  const MINER_MINING_IMPACT_FRAME = MINER_MINING_FRAMES[2];
   const MINER_WALK_SPEED = 58;
   const MINER_STAGE_MARGIN = 16;
   const MINER_TURN_PAUSE_MS = 420;
   const MINER_MINE_POSE_MS = MINER_MINING_FRAME_DURATIONS.reduce((total, duration) => total + duration, 0);
+  const MINING_IMPACT_EFFECT_MS = 520;
+  const MINING_IMPACT_PARTICLE_VECTORS = Object.freeze([
+    Object.freeze({ x: -48, y: -38, size: 5, rotation: -90, color: "var(--mine-accent)" }),
+    Object.freeze({ x: -30, y: -54, size: 4, rotation: -45, color: "var(--mine-contrast)" }),
+    Object.freeze({ x: -14, y: -35, size: 6, rotation: 45, color: "var(--mine-secondary)" }),
+    Object.freeze({ x: 8, y: -58, size: 4, rotation: 90, color: "var(--mine-accent)" }),
+    Object.freeze({ x: 28, y: -42, size: 5, rotation: 135, color: "var(--mine-contrast)" }),
+    Object.freeze({ x: 50, y: -26, size: 4, rotation: 180, color: "var(--mine-secondary)" }),
+    Object.freeze({ x: -42, y: -12, size: 4, rotation: -135, color: "var(--mine-secondary)" }),
+    Object.freeze({ x: 42, y: -6, size: 6, rotation: 225, color: "var(--mine-accent)" }),
+    Object.freeze({ x: -22, y: 10, size: 5, rotation: -180, color: "var(--mine-contrast)" }),
+    Object.freeze({ x: 20, y: 14, size: 4, rotation: 270, color: "var(--mine-secondary)" }),
+    Object.freeze({ x: -58, y: -24, size: 3, rotation: -270, color: "var(--mine-accent)" }),
+    Object.freeze({ x: 58, y: -44, size: 3, rotation: 315, color: "var(--mine-contrast)" }),
+  ]);
 
   const CHARACTER_DEFINITIONS = Object.freeze([
     Object.freeze({ id: "female", name: "여자 광부", shortName: "여자", row: 0 }),
@@ -580,6 +596,11 @@
     lastVariantIndex: -1,
     bufferGenerationCount: 0,
   };
+  const miningImpactState = {
+    pendingHitCount: 0,
+    pendingGain: 0,
+    sequence: 0,
+  };
   const storageState = {
     available: false,
     readError: null,
@@ -666,6 +687,7 @@
       "currentOreName",
       "mineButton",
       "mineGainLabel",
+      "miningEffects",
       "oreCanvas",
       "minerActor",
       "minerCanvas",
@@ -1370,6 +1392,7 @@
     sessionBlocked = true;
     sessionStarted = false;
     stopMinerActorMotion();
+    clearPendingMiningImpacts(true);
     stopActiveMiningSounds(true);
     window.clearTimeout(minerPoseResetTimer);
     minerPoseResetTimer = null;
@@ -1547,18 +1570,17 @@
   function handleMineClick() {
     if (!sessionStarted || sessionBlocked || !state) return;
     advanceDataTo(state, Date.now(), false);
-    triggerMinerMiningPose();
-    playMiningSoundEffect();
 
     const gain = calculateClickPower();
     state.currency = safeAdd(state.currency, gain);
     state.totalCurrencyEarned = safeAdd(state.totalCurrencyEarned, gain);
     state.totalClicks = safeAdd(state.totalClicks, 1);
+    queueMiningImpact(gain);
+    triggerMinerMiningPose();
 
     evaluateAchievements(true);
     renderGameValues();
     renderUpgrades();
-    animateMineGain(gain);
     scheduleMutationSave();
   }
 
@@ -2317,8 +2339,12 @@
     return frames[Math.floor(elapsed / frameDuration) % frames.length];
   }
 
+  function getMiningAnimationElapsed(timestamp) {
+    return Math.max(0, timestamp - minerActorState.miningStartedAt) % MINER_MINE_POSE_MS;
+  }
+
   function getMiningAnimationFrame(timestamp) {
-    const elapsed = Math.max(0, timestamp - minerActorState.miningStartedAt) % MINER_MINE_POSE_MS;
+    const elapsed = getMiningAnimationElapsed(timestamp);
     let frameEnd = 0;
     for (let index = 0; index < MINER_MINING_FRAMES.length; index += 1) {
       frameEnd += MINER_MINING_FRAME_DURATIONS[index];
@@ -2329,13 +2355,56 @@
 
   function getMinerAnimationFrame(timestamp = performance.now()) {
     if (shouldReduceMinerMotion()) {
-      return minerActorState.poseId === "mining" ? MINER_MINING_FRAMES[0] : MINER_IDLE_FRAMES[0];
+      return minerActorState.poseId === "mining" ? MINER_MINING_IMPACT_FRAME : MINER_IDLE_FRAMES[0];
     }
     if (minerActorState.poseId === "mining") return getMiningAnimationFrame(timestamp);
     if (minerActorState.poseId === "side") {
       return getLoopingMinerFrame(MINER_WALK_FRAMES, MINER_WALK_FRAME_MS, timestamp, minerActorState.poseStartedAt);
     }
     return getLoopingMinerFrame(MINER_IDLE_FRAMES, MINER_IDLE_FRAME_MS, timestamp, minerActorState.poseStartedAt);
+  }
+
+  function queueMiningImpact(gain) {
+    miningImpactState.pendingHitCount += 1;
+    miningImpactState.pendingGain = safeAdd(miningImpactState.pendingGain, gain);
+    dom.mineButton.dataset.pendingImpactHits = String(miningImpactState.pendingHitCount);
+    dom.mineButton.dataset.pendingImpactGain = String(miningImpactState.pendingGain);
+    prepareMiningSoundEffect();
+  }
+
+  function clearPendingMiningImpacts(removeEffects = false) {
+    miningImpactState.pendingHitCount = 0;
+    miningImpactState.pendingGain = 0;
+    if (dom.mineButton) {
+      dom.mineButton.dataset.pendingImpactHits = "0";
+      dom.mineButton.dataset.pendingImpactGain = "0";
+    }
+    if (removeEffects && dom.miningEffects) dom.miningEffects.replaceChildren();
+  }
+
+  function flushPendingMiningImpact(frameIndex, timestamp = performance.now()) {
+    if (frameIndex !== MINER_MINING_IMPACT_FRAME || miningImpactState.pendingHitCount < 1) return false;
+
+    const hitCount = miningImpactState.pendingHitCount;
+    const gain = miningImpactState.pendingGain;
+    const impactId = miningImpactState.sequence + 1;
+    miningImpactState.sequence = impactId;
+    clearPendingMiningImpacts();
+
+    const elapsedMs = shouldReduceMinerMotion()
+      ? 0
+      : Math.round(getMiningAnimationElapsed(timestamp));
+    dom.mineButton.dataset.impactId = String(impactId);
+    dom.mineButton.dataset.impactFrame = String(frameIndex);
+    dom.mineButton.dataset.impactHitCount = String(hitCount);
+    dom.mineButton.dataset.impactGain = String(gain);
+    dom.mineButton.dataset.impactAnimationElapsedMs = String(elapsedMs);
+    dom.minerActor.dataset.impactId = String(impactId);
+    dom.minerActor.dataset.impactFrame = String(frameIndex);
+
+    playMiningSoundEffect({ impactId, frameIndex });
+    animateMiningImpact(gain, hitCount, impactId, frameIndex);
+    return true;
   }
 
   function getMinerActorMaxX() {
@@ -2381,13 +2450,25 @@
       nextPose,
       minerActorState.facingLeft,
     ).then((rendered) => {
-      if (rendered === true) dom.minerActor.dataset.ready = "true";
-      else if (rendered === false) dom.minerActor.dataset.ready = "error";
+      if (rendered === true) {
+        dom.minerActor.dataset.ready = "true";
+        if (
+          nextPose === "mining" &&
+          nextFrameIndex === MINER_MINING_IMPACT_FRAME &&
+          dom.minerActor.dataset.pose === "mining" &&
+          dom.minerActor.dataset.frameIndex === String(MINER_MINING_IMPACT_FRAME)
+        ) {
+          flushPendingMiningImpact(nextFrameIndex);
+        }
+      } else if (rendered === false) {
+        dom.minerActor.dataset.ready = "error";
+      }
     });
   }
 
   function resetMinerActorMotion() {
     stopMinerActorMotion();
+    clearPendingMiningImpacts(true);
     window.clearTimeout(minerPoseResetTimer);
     minerPoseResetTimer = null;
     const now = performance.now();
@@ -2438,6 +2519,7 @@
     } else if (timestamp < minerActorState.idleUntil) {
       setMinerActorPose("front", timestamp);
     } else {
+      if (minerActorState.poseId === "mining") clearPendingMiningImpacts();
       setMinerActorPose("side", timestamp);
       minerActorState.facingLeft = minerActorState.direction < 0;
       minerActorState.x += minerActorState.direction * MINER_WALK_SPEED * elapsedSeconds;
@@ -2468,9 +2550,12 @@
     const now = performance.now();
     const actorCenter = minerActorState.x + dom.minerActor.getBoundingClientRect().width / 2;
     const alreadyMining = minerActorState.poseId === "mining" && now < minerActorState.miningUntil;
+    const currentMiningFrame = alreadyMining ? getMinerAnimationFrame(now) : null;
     minerActorState.facingLeft = actorCenter > dom.mineStage.clientWidth / 2;
     setMinerActorPose("mining", now);
-    if (!alreadyMining) minerActorState.miningStartedAt = now;
+    if (!alreadyMining || currentMiningFrame === MINER_MINING_FRAMES[MINER_MINING_FRAMES.length - 1]) {
+      minerActorState.miningStartedAt = now;
+    }
     minerActorState.miningUntil = now + MINER_MINE_POSE_MS;
     minerActorState.idleUntil = 0;
     renderMinerActorPose(true, now);
@@ -2485,6 +2570,7 @@
         setMinerActorPose("front", resetAt);
         minerActorState.miningUntil = 0;
         minerActorState.miningStartedAt = 0;
+        clearPendingMiningImpacts();
         renderMinerActorPose(true, resetAt);
       }, MINER_MINE_POSE_MS);
     }
@@ -2501,6 +2587,7 @@
     const now = performance.now();
     window.clearTimeout(minerPoseResetTimer);
     minerPoseResetTimer = null;
+    clearPendingMiningImpacts(true);
     if (shouldReduceMinerMotion()) {
       stopMinerActorMotion();
       minerActorState.x = MINER_STAGE_MARGIN;
@@ -3166,16 +3253,16 @@
     return (miningSoundEngine.lastVariantIndex + offset) % bufferCount;
   }
 
-  function playMiningSoundEffect() {
+  function prepareMiningSoundEffect() {
     if (
       !state?.settings.soundEffectsEnabled ||
       state.settings.soundEffectsVolume <= 0 ||
       document.hidden
-    ) return;
+    ) return null;
 
     const engine = ensureMiningSoundEngine();
     const context = engine?.context;
-    if (!engine || !context || engine.buffers.length === 0) return;
+    if (!engine || !context || engine.buffers.length === 0) return null;
 
     if (context.state === "suspended") {
       try {
@@ -3187,6 +3274,13 @@
         setSoundEffectsStatus("재생 대기 · 광맥을 다시 눌러주세요.", true);
       }
     }
+    return engine;
+  }
+
+  function playMiningSoundEffect(options = {}) {
+    const engine = prepareMiningSoundEffect();
+    const context = engine?.context;
+    if (!engine || !context) return false;
 
     const variantIndex = selectMiningSoundVariant(engine.buffers.length);
     const buffer = engine.buffers[variantIndex];
@@ -3240,12 +3334,16 @@
       dom.mineButton.dataset.sfxPlaybackRate = playbackRate.toFixed(3);
       dom.mineButton.dataset.sfxBrightness = String(Math.round(brightness));
       dom.mineButton.dataset.sfxVolume = state.settings.soundEffectsVolume.toFixed(2);
+      dom.mineButton.dataset.sfxImpactId = String(options.impactId ?? "");
+      dom.mineButton.dataset.sfxImpactFrame = String(options.frameIndex ?? "");
+      return true;
     } catch {
       engine.activeSources.delete(source);
       source.disconnect();
       filter.disconnect();
       voiceGain.disconnect();
       setSoundEffectsStatus("재생 실패 · 광맥을 다시 눌러주세요.", true);
+      return false;
     }
   }
 
@@ -3280,6 +3378,7 @@
     if (!sessionStarted || sessionBlocked) return;
     if (document.hidden) {
       stopMinerActorMotion();
+      clearPendingMiningImpacts(true);
       stopActiveMiningSounds(true);
       saveGame("백그라운드 저장");
       pauseBackgroundMusic("일시 정지 · 탭으로 돌아오면 재생합니다.");
@@ -3297,6 +3396,7 @@
     if (!sessionStarted || sessionBlocked) return;
     pageIsHiding = true;
     stopMinerActorMotion();
+    clearPendingMiningImpacts(true);
     stopActiveMiningSounds(true);
     saveGame("페이지 종료 저장");
     pauseBackgroundMusic("일시 정지 · 페이지를 다시 열면 재생합니다.");
@@ -3323,6 +3423,7 @@
   function handleBeforeUnload() {
     if (!sessionStarted || sessionBlocked) return;
     stopMinerActorMotion();
+    clearPendingMiningImpacts(true);
     stopActiveMiningSounds(true);
     if (!pageIsHiding) saveGame("종료 직전 저장");
     pauseBackgroundMusic();
@@ -3339,7 +3440,7 @@
     return result.elapsedMs >= MIN_OFFLINE_REPORT_MS && result.reward >= 0.1;
   }
 
-  function animateMineGain(gain) {
+  function animateMiningImpact(gain, hitCount, impactId, frameIndex) {
     dom.mineButton.classList.remove("is-hit");
     void dom.mineButton.offsetWidth;
     dom.mineButton.classList.add("is-hit");
@@ -3348,8 +3449,58 @@
     const floating = document.createElement("span");
     floating.className = "floating-gain";
     floating.textContent = `+${formatNumber(gain)}`;
+    floating.dataset.impactId = String(impactId);
+    floating.dataset.hitCount = String(hitCount);
     dom.mineButton.append(floating);
     window.setTimeout(() => floating.remove(), 750);
+
+    createMiningImpactParticles(hitCount, impactId, frameIndex);
+  }
+
+  function createMiningImpactParticles(hitCount, impactId, frameIndex) {
+    if (!dom.miningEffects || !dom.oreCanvas) return;
+    const stageRect = dom.mineStage.getBoundingClientRect();
+    const oreRect = dom.oreCanvas.getBoundingClientRect();
+    const burst = document.createElement("span");
+    const flash = document.createElement("span");
+    const particleCount = Math.min(
+      MINING_IMPACT_PARTICLE_VECTORS.length,
+      7 + Math.ceil(Math.log2(Math.max(1, hitCount) + 1)),
+    );
+    const intensity = Math.min(1.35, 1 + Math.log2(Math.max(1, hitCount)) * 0.05);
+    const impactX = oreRect.left - stageRect.left + oreRect.width * 0.5;
+    const impactY = oreRect.top - stageRect.top + oreRect.height * 0.38;
+
+    while (dom.miningEffects.childElementCount >= 4) dom.miningEffects.firstElementChild?.remove();
+
+    burst.className = "mining-impact-burst";
+    burst.dataset.impactId = String(impactId);
+    burst.dataset.frameIndex = String(frameIndex);
+    burst.dataset.hitCount = String(hitCount);
+    burst.style.left = `${impactX.toFixed(1)}px`;
+    burst.style.top = `${impactY.toFixed(1)}px`;
+
+    flash.className = "mining-impact-flash";
+    burst.append(flash);
+
+    for (let index = 0; index < particleCount; index += 1) {
+      const vector = MINING_IMPACT_PARTICLE_VECTORS[index];
+      const chip = document.createElement("span");
+      chip.className = "mining-impact-chip";
+      chip.style.setProperty("--chip-x", `${Math.round(vector.x * intensity)}px`);
+      chip.style.setProperty("--chip-y", `${Math.round(vector.y * intensity)}px`);
+      chip.style.setProperty("--chip-size", `${vector.size}px`);
+      chip.style.setProperty("--chip-rotation", `${vector.rotation}deg`);
+      chip.style.setProperty("--chip-color", vector.color);
+      burst.append(chip);
+    }
+
+    dom.miningEffects.dataset.impactId = String(impactId);
+    dom.miningEffects.dataset.impactFrame = String(frameIndex);
+    dom.miningEffects.dataset.impactHitCount = String(hitCount);
+    dom.miningEffects.dataset.particleCount = String(particleCount);
+    dom.miningEffects.append(burst);
+    window.setTimeout(() => burst.remove(), MINING_IMPACT_EFFECT_MS);
   }
 
   function drawOreSprite(canvas = dom.oreCanvas, definition = ORE_DEFINITIONS[getSelectedOreIndex()]) {

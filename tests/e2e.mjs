@@ -14,6 +14,7 @@ const START_MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-mobile.png";
 const START_NOTICE_MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-start-notice-mobile.png";
 const MOBILE_SCREENSHOT_PATH = "/tmp/pixel-mine-mobile.png";
 const MOBILE_SHOP_SCREENSHOT_PATH = "/tmp/pixel-mine-shop-mobile.png";
+const MINING_IMPACT_SCREENSHOT_PATH = "/tmp/pixel-mine-impact.png";
 const MINERAL_CATALOG_SCREENSHOT_PATH = "/tmp/pixel-mine-minerals.png";
 const ACHIEVEMENTS_SCREENSHOT_PATH = "/tmp/pixel-mine-achievements.png";
 const SAVE_MENU_SCREENSHOT_PATH = "/tmp/pixel-mine-save-menu.png";
@@ -796,21 +797,52 @@ async function run() {
     await waitFor(page, "!document.getElementById('saveManagementDialog').open && document.getElementById('saveMenuButton').getAttribute('aria-expanded') === 'false'");
     pass("저장 아이콘으로 저장 상태·백업·복원·초기화 기능 팝업을 열고 닫는다");
 
-    const coalMiningSound = await page.evaluate(`(() => {
+    const coalMiningQueued = await page.evaluate(`(() => {
       const mine = document.getElementById('mineButton');
-      const variants = [];
+      const beforeImpactId = Number(mine.dataset.impactId ?? 0);
+      const beforePlayCount = Number(mine.dataset.sfxPlayCount ?? 0);
       for (let index = 0; index < 10; index += 1) {
         mine.click();
-        variants.push(Number(mine.dataset.sfxVariant));
       }
       document.querySelector('.upgrade-buy').click();
       for (let index = 0; index < 3; index += 1) {
         mine.click();
-        variants.push(Number(mine.dataset.sfxVariant));
       }
       document.getElementById('manualSaveButton').click();
       return {
-        variants,
+        beforeImpactId,
+        beforePlayCount,
+        pendingHits: Number(mine.dataset.pendingImpactHits),
+        pendingGain: Number(mine.dataset.pendingImpactGain),
+        bufferCount: Number(mine.dataset.sfxBufferCount),
+        bufferGenerationCount: Number(mine.dataset.sfxBufferGenerationCount),
+        playCountBeforeImpact: Number(mine.dataset.sfxPlayCount ?? 0)
+      };
+    })()`);
+    assert(
+      coalMiningQueued.pendingHits === 13 &&
+        coalMiningQueued.pendingGain === 16 &&
+        coalMiningQueued.bufferCount === 4 &&
+        coalMiningQueued.bufferGenerationCount === 1 &&
+        coalMiningQueued.playCountBeforeImpact === coalMiningQueued.beforePlayCount,
+      `연속 클릭이 타격 프레임 전까지 올바르게 대기하지 않습니다: ${JSON.stringify(coalMiningQueued)}`,
+    );
+    await waitFor(
+      page,
+      `Number(document.getElementById('mineButton').dataset.impactId ?? 0) > ${coalMiningQueued.beforeImpactId} &&
+       document.getElementById('minerCanvas').dataset.frameIndex === '8' &&
+       document.getElementById('miningEffects').dataset.impactFrame === '8'`,
+      2_000,
+    );
+    const coalMiningSound = await page.evaluate(`(() => {
+      const mine = document.getElementById('mineButton');
+      const actor = document.getElementById('minerActor');
+      const canvas = document.getElementById('minerCanvas');
+      const effects = document.getElementById('miningEffects');
+      const burst = effects.querySelector('.mining-impact-burst');
+      const floating = document.querySelector('.floating-gain');
+      return {
+        variant: Number(mine.dataset.sfxVariant),
         bufferCount: Number(mine.dataset.sfxBufferCount),
         bufferGenerationCount: Number(mine.dataset.sfxBufferGenerationCount),
         playCount: Number(mine.dataset.sfxPlayCount),
@@ -819,17 +851,35 @@ async function run() {
         durationMs: Number(mine.dataset.sfxDurationMs),
         playbackRate: Number(mine.dataset.sfxPlaybackRate),
         brightness: Number(mine.dataset.sfxBrightness),
-        volume: Number(mine.dataset.sfxVolume)
+        volume: Number(mine.dataset.sfxVolume),
+        pendingHits: Number(mine.dataset.pendingImpactHits),
+        impactId: Number(mine.dataset.impactId),
+        impactFrame: Number(mine.dataset.impactFrame),
+        impactHitCount: Number(mine.dataset.impactHitCount),
+        impactGain: Number(mine.dataset.impactGain),
+        impactElapsedMs: Number(mine.dataset.impactAnimationElapsedMs),
+        sfxImpactId: Number(mine.dataset.sfxImpactId),
+        sfxImpactFrame: Number(mine.dataset.sfxImpactFrame),
+        actorImpactId: Number(actor.dataset.impactId),
+        actorFrame: Number(canvas.dataset.frameIndex),
+        effectImpactId: Number(effects.dataset.impactId),
+        effectFrame: Number(effects.dataset.impactFrame),
+        particleCount: Number(effects.dataset.particleCount),
+        burstImpactId: Number(burst?.dataset.impactId),
+        burstFrame: Number(burst?.dataset.frameIndex),
+        burstChips: burst?.querySelectorAll('.mining-impact-chip').length ?? 0,
+        floatingImpactId: Number(floating?.dataset.impactId),
+        floatingHitCount: Number(floating?.dataset.hitCount),
+        hitClass: mine.classList.contains('is-hit')
       };
     })()`);
     assert(
-      coalMiningSound.variants.length === 13 &&
-        coalMiningSound.variants.every((variant) => Number.isInteger(variant) && variant >= 1 && variant <= 4) &&
-        coalMiningSound.variants.every((variant, index, values) => index === 0 || variant !== values[index - 1]) &&
-        new Set(coalMiningSound.variants).size >= 2 &&
+      Number.isInteger(coalMiningSound.variant) &&
+        coalMiningSound.variant >= 1 &&
+        coalMiningSound.variant <= 4 &&
         coalMiningSound.bufferCount === 4 &&
         coalMiningSound.bufferGenerationCount === 1 &&
-        coalMiningSound.playCount === 13 &&
+        coalMiningSound.playCount === coalMiningQueued.beforePlayCount + 1 &&
         coalMiningSound.activeVoices <= 6 &&
         coalMiningSound.ore === "coal" &&
         coalMiningSound.durationMs >= 80 &&
@@ -838,11 +888,32 @@ async function run() {
         coalMiningSound.playbackRate < 0.99 &&
         coalMiningSound.brightness >= 1_700 &&
         coalMiningSound.brightness <= 1_900 &&
-        coalMiningSound.volume === 0.25,
-      `석탄 채굴 효과음 합성 또는 버퍼 재사용 결과가 올바르지 않습니다: ${JSON.stringify(coalMiningSound)}`,
+        coalMiningSound.volume === 0.25 &&
+        coalMiningSound.pendingHits === 0 &&
+        coalMiningSound.impactFrame === 8 &&
+        coalMiningSound.actorFrame === 8 &&
+        coalMiningSound.impactHitCount === 13 &&
+        coalMiningSound.impactGain === 16 &&
+        coalMiningSound.impactElapsedMs >= 190 &&
+        coalMiningSound.impactElapsedMs <= 300 &&
+        coalMiningSound.sfxImpactId === coalMiningSound.impactId &&
+        coalMiningSound.sfxImpactFrame === 8 &&
+        coalMiningSound.actorImpactId === coalMiningSound.impactId &&
+        coalMiningSound.effectImpactId === coalMiningSound.impactId &&
+        coalMiningSound.effectFrame === 8 &&
+        coalMiningSound.burstImpactId === coalMiningSound.impactId &&
+        coalMiningSound.burstFrame === 8 &&
+        coalMiningSound.particleCount === coalMiningSound.burstChips &&
+        coalMiningSound.particleCount >= 8 &&
+        coalMiningSound.floatingImpactId === coalMiningSound.impactId &&
+        coalMiningSound.floatingHitCount === 13 &&
+        coalMiningSound.hitClass,
+      `내려치기 프레임·효과음·파편 동기화 결과가 올바르지 않습니다: ${JSON.stringify(coalMiningSound)}`,
     );
-    pass("80~140ms 채굴음 4개를 한 번 합성해 재사용하고 연속 클릭마다 겹치지 않게 무작위 재생한다");
-    await delay(100);
+    const miningImpactScreenshot = await page.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+    await writeFile(MINING_IMPACT_SCREENSHOT_PATH, Buffer.from(miningImpactScreenshot.data, "base64"));
+    pass("연속 클릭을 합산하고 내려치기 8번 프레임에서 80~140ms 효과음·광맥 반동·획득 숫자·파편을 같은 이벤트로 재생한다");
+    await delay(80);
     await waitFor(page, "document.getElementById('minerActor').dataset.pose === 'mining' && document.getElementById('minerCanvas').dataset.pose === 'mining'", 2_000);
     const miningPose = await page.evaluate(`(() => ({
       actorPose: document.getElementById('minerActor').dataset.pose,
@@ -1435,33 +1506,60 @@ async function run() {
     );
     pass("최대 구매로 남은 4단계를 개척해 다이아 배율을 적용하고 광물 발견 업적 5종을 해금한다");
 
-    const diamondMiningSound = await page.evaluate(`(() => {
+    const diamondMiningQueued = await page.evaluate(`(() => {
       const mine = document.getElementById('mineButton');
       const before = Number(mine.dataset.sfxPlayCount ?? 0);
+      const beforeImpactId = Number(mine.dataset.impactId ?? 0);
       mine.click();
       return {
         before,
+        beforeImpactId,
+        pendingHits: Number(mine.dataset.pendingImpactHits)
+      };
+    })()`);
+    assert(
+      diamondMiningQueued.pendingHits === 1,
+      `다이아 채굴 피드백이 타격 프레임 전에 대기하지 않습니다: ${JSON.stringify(diamondMiningQueued)}`,
+    );
+    await waitFor(
+      page,
+      `Number(document.getElementById('mineButton').dataset.impactId ?? 0) > ${diamondMiningQueued.beforeImpactId} &&
+       document.getElementById('minerCanvas').dataset.frameIndex === '8'`,
+      2_000,
+    );
+    const diamondMiningSound = await page.evaluate(`(() => {
+      const mine = document.getElementById('mineButton');
+      return {
         after: Number(mine.dataset.sfxPlayCount),
         bufferCount: Number(mine.dataset.sfxBufferCount),
         bufferGenerationCount: Number(mine.dataset.sfxBufferGenerationCount),
         ore: mine.dataset.sfxOre,
+        variant: Number(mine.dataset.sfxVariant),
         durationMs: Number(mine.dataset.sfxDurationMs),
         playbackRate: Number(mine.dataset.sfxPlaybackRate),
-        brightness: Number(mine.dataset.sfxBrightness)
+        brightness: Number(mine.dataset.sfxBrightness),
+        impactId: Number(mine.dataset.impactId),
+        sfxImpactId: Number(mine.dataset.sfxImpactId),
+        impactFrame: Number(mine.dataset.impactFrame),
+        sfxImpactFrame: Number(mine.dataset.sfxImpactFrame)
       };
     })()`);
     assert(
-      diamondMiningSound.after === diamondMiningSound.before + 1 &&
+      diamondMiningSound.after === diamondMiningQueued.before + 1 &&
         diamondMiningSound.bufferCount === 4 &&
         diamondMiningSound.bufferGenerationCount === 1 &&
         diamondMiningSound.ore === "diamond" &&
+        diamondMiningSound.variant !== coalMiningSound.variant &&
         diamondMiningSound.durationMs >= 80 &&
         diamondMiningSound.durationMs <= 140 &&
         diamondMiningSound.playbackRate > coalMiningSound.playbackRate &&
-        diamondMiningSound.brightness > coalMiningSound.brightness * 2,
+        diamondMiningSound.brightness > coalMiningSound.brightness * 2 &&
+        diamondMiningSound.sfxImpactId === diamondMiningSound.impactId &&
+        diamondMiningSound.impactFrame === 8 &&
+        diamondMiningSound.sfxImpactFrame === 8,
       `다이아 광물별 효과음 프로필이 적용되지 않았습니다: ${JSON.stringify({ coalMiningSound, diamondMiningSound })}`,
     );
-    pass("석탄부터 다이아까지 광물 단계에 따라 채굴음 피치와 밝기를 높여 재생한다");
+    pass("광물별 피치·밝기 변형도 동일한 내려치기 프레임에서 재생하고 직전 효과음 변형을 반복하지 않는다");
 
     await page.evaluate("document.getElementById('characterMenuButton').click(); true");
     await waitFor(page, "document.getElementById('characterDialog').open && document.querySelector('[data-outfit-id=\"casual\"]').dataset.state === 'available' && document.querySelector('[data-outfit-id=\"space\"]').dataset.state === 'available'");
@@ -2199,6 +2297,39 @@ async function run() {
       `저장소 차단 fallback이 올바르지 않습니다: ${JSON.stringify(memoryFallback)}`,
     );
     pass("localStorage 쓰기가 차단되어도 메모리 모드 경고와 함께 게임을 계속 실행한다");
+
+    await secondPage.evaluate(`(() => {
+      const toggle = document.getElementById('reducedMotionToggle');
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('mineButton').click();
+      return true;
+    })()`);
+    await waitFor(
+      secondPage,
+      "document.getElementById('minerCanvas').dataset.frameIndex === '8' && document.getElementById('mineButton').dataset.impactFrame === '8'",
+      2_000,
+    );
+    const reducedMotionImpact = await secondPage.evaluate(`(() => ({
+      frame: Number(document.getElementById('minerCanvas').dataset.frameIndex),
+      impactFrame: Number(document.getElementById('mineButton').dataset.impactFrame),
+      sfxFrame: Number(document.getElementById('mineButton').dataset.sfxImpactFrame),
+      effectFrame: Number(document.getElementById('miningEffects').dataset.impactFrame),
+      elapsedMs: Number(document.getElementById('mineButton').dataset.impactAnimationElapsedMs),
+      hitCount: Number(document.getElementById('mineButton').dataset.impactHitCount),
+      bodyClass: document.body.classList.contains('reduce-motion')
+    }))()`);
+    assert(
+      reducedMotionImpact.bodyClass &&
+        reducedMotionImpact.frame === 8 &&
+        reducedMotionImpact.impactFrame === 8 &&
+        reducedMotionImpact.sfxFrame === 8 &&
+        reducedMotionImpact.effectFrame === 8 &&
+        reducedMotionImpact.elapsedMs === 0 &&
+        reducedMotionImpact.hitCount === 1,
+      `모션 감소 상태의 정적 타격 프레임 동기화가 올바르지 않습니다: ${JSON.stringify(reducedMotionImpact)}`,
+    );
+    pass("모션 감소 설정에서도 애니메이션 이동 없이 정적 내려치기 프레임에 효과음과 파편을 동기화한다");
 
     assert(runtimeErrors.length === 0, `브라우저 런타임 예외 발생: ${runtimeErrors.join(" | ")}`);
     pass("검증 시나리오 전체에서 처리되지 않은 JavaScript 예외가 없다");
