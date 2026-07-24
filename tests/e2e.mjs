@@ -368,6 +368,23 @@ async function run() {
     );
     pass("게임 시작 제스처에서 기본 활성화된 배경음악을 반복 재생한다");
 
+    const animationSheets = await page.evaluate(`Promise.all([
+      'assets/pixel-miner-workwear-animation-sheet-10f-v1.png',
+      'assets/pixel-miner-casual-animation-sheet-10f-v1.png',
+      'assets/pixel-miner-space-animation-sheet-10f-v1.png'
+    ].map((source) => new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve({ source, width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => resolve({ source, width: 0, height: 0 });
+      image.src = source;
+    })))`);
+    assert(
+      animationSheets.length === 3 &&
+        animationSheets.every((sheet) => sheet.width === 2560 && sheet.height === 768),
+      `캐릭터 10프레임 시트 크기 또는 로딩 상태가 올바르지 않습니다: ${JSON.stringify(animationSheets)}`,
+    );
+    pass("기본·캐주얼·우주복 10프레임 시트를 256px 셀의 10열×3행 자산으로 불러온다");
+
     await waitFor(page, "document.getElementById('minerActor').dataset.ready === 'true' && document.getElementById('minerCanvas').dataset.pose === 'side'", 8_000);
     const actorStart = await page.evaluate(`(() => {
       const actor = document.getElementById('minerActor');
@@ -380,21 +397,30 @@ async function run() {
         x: Number(actor.dataset.x),
         canvasWidth: canvas.width,
         canvasHeight: canvas.height,
+        frameIndex: Number(canvas.dataset.frameIndex),
+        animationSheet: canvas.dataset.animationSheet,
         pointerEvents: getComputedStyle(actor).pointerEvents
       };
     })()`);
     await delay(350);
     const actorMovedX = await page.evaluate("Number(document.getElementById('minerActor').dataset.x)");
+    const actorMovedFrame = await page.evaluate("Number(document.getElementById('minerCanvas').dataset.frameIndex)");
     assert(
       actorStart.character === "female" &&
         actorStart.outfit === "workwear" &&
         actorStart.pose === "side" &&
         actorStart.facing === "right" &&
-        actorStart.canvasWidth === 360 &&
-        actorStart.canvasHeight === 418 &&
+        actorStart.canvasWidth === 256 &&
+        actorStart.canvasHeight === 256 &&
+        actorStart.frameIndex >= 2 &&
+        actorStart.frameIndex <= 5 &&
+        actorStart.animationSheet === "assets/pixel-miner-workwear-animation-sheet-10f-v1.png" &&
         actorStart.pointerEvents === "none" &&
-        actorMovedX > actorStart.x,
-      `기본 광부 Canvas 또는 오른쪽 이동 상태가 올바르지 않습니다: ${JSON.stringify({ actorStart, actorMovedX })}`,
+        actorMovedX > actorStart.x &&
+        actorMovedFrame >= 2 &&
+        actorMovedFrame <= 5 &&
+        actorMovedFrame !== actorStart.frameIndex,
+      `기본 광부 10프레임 Canvas 또는 오른쪽 이동 상태가 올바르지 않습니다: ${JSON.stringify({ actorStart, actorMovedX, actorMovedFrame })}`,
     );
 
     await page.evaluate("document.getElementById('characterMenuButton').click(); true");
@@ -451,16 +477,60 @@ async function run() {
     const flippedActor = await page.evaluate(`(() => ({
       actorFacing: document.getElementById('minerActor').dataset.facing,
       canvasFacing: document.getElementById('minerCanvas').dataset.facing,
-      pose: document.getElementById('minerCanvas').dataset.pose
+      pose: document.getElementById('minerCanvas').dataset.pose,
+      frameIndex: Number(document.getElementById('minerCanvas').dataset.frameIndex)
     }))()`);
     assert(
       leftMovementEnd < leftMovementStart &&
         flippedActor.actorFacing === "left" &&
         flippedActor.canvasFacing === "left" &&
-        flippedActor.pose === "side",
+        flippedActor.pose === "side" &&
+        flippedActor.frameIndex >= 2 &&
+        flippedActor.frameIndex <= 5,
       `캐릭터 좌측 이동 또는 Canvas 반전 결과가 올바르지 않습니다: ${JSON.stringify({ leftMovementStart, leftMovementEnd, flippedActor })}`,
     );
     pass("광부가 광산 안을 좌우로 왕복하고 진행 방향에 맞춰 Canvas 이미지를 반전한다");
+
+    await page.evaluate(`(() => {
+      const toggle = document.getElementById('reducedMotionToggle');
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(
+      page,
+      "document.getElementById('minerActor').dataset.pose === 'front' && document.getElementById('minerCanvas').dataset.frameIndex === '0'",
+      2_000,
+    );
+    const reducedMotionStart = await page.evaluate(`(() => ({
+      x: Number(document.getElementById('minerActor').dataset.x),
+      frameIndex: Number(document.getElementById('minerCanvas').dataset.frameIndex),
+      bodyClass: document.body.classList.contains('reduce-motion')
+    }))()`);
+    await delay(500);
+    const reducedMotionEnd = await page.evaluate(`(() => ({
+      x: Number(document.getElementById('minerActor').dataset.x),
+      frameIndex: Number(document.getElementById('minerCanvas').dataset.frameIndex)
+    }))()`);
+    assert(
+      reducedMotionStart.bodyClass &&
+        reducedMotionStart.frameIndex === 0 &&
+        reducedMotionEnd.frameIndex === 0 &&
+        Math.abs(reducedMotionEnd.x - reducedMotionStart.x) < 0.01,
+      `모션 감소 설정에서 광부가 정지 프레임을 유지하지 않습니다: ${JSON.stringify({ reducedMotionStart, reducedMotionEnd })}`,
+    );
+    await page.evaluate(`(() => {
+      const toggle = document.getElementById('reducedMotionToggle');
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(
+      page,
+      "document.getElementById('minerActor').dataset.pose === 'side' && Number(document.getElementById('minerCanvas').dataset.frameIndex) >= 2 && Number(document.getElementById('minerCanvas').dataset.frameIndex) <= 5",
+      3_000,
+    );
+    pass("모션 감소 설정에서는 대기 첫 프레임으로 정지하고 해제하면 걷기 애니메이션을 재개한다");
 
     const featureNavigation = await page.evaluate(`(() => {
       const gameApp = document.getElementById('gameApp');
@@ -779,6 +849,7 @@ async function run() {
       canvasPose: document.getElementById('minerCanvas').dataset.pose,
       actorFacing: document.getElementById('minerActor').dataset.facing,
       canvasFacing: document.getElementById('minerCanvas').dataset.facing,
+      frameIndex: Number(document.getElementById('minerCanvas').dataset.frameIndex),
       mineButtonZ: getComputedStyle(document.getElementById('mineButton')).zIndex,
       oreZ: Number(getComputedStyle(document.getElementById('oreCanvas')).zIndex),
       actorZ: Number(getComputedStyle(document.getElementById('minerActor')).zIndex),
@@ -791,6 +862,8 @@ async function run() {
       miningPose.actorPose === "mining" &&
         miningPose.canvasPose === "mining" &&
         miningPose.actorFacing === miningPose.canvasFacing &&
+        miningPose.frameIndex >= 6 &&
+        miningPose.frameIndex <= 9 &&
         miningPose.mineButtonZ === "auto" &&
         miningPose.oreZ < miningPose.actorZ &&
         miningPose.actorZ < miningPose.gainZ &&
@@ -1453,7 +1526,7 @@ async function run() {
     await waitFor(page, "!document.getElementById('outfitPurchaseDialog').open && JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics.ownedOutfitIds.includes('space') && JSON.parse(localStorage.getItem('pixelMine.save')).data.unlockedAchievements.buy_space_outfit > 0 && document.getElementById('gameOutfitSelect').value === 'space'");
     pass("우주복 12억 구매는 가격·보유량·구매 후 잔액 확인을 거치며 취소 시 광석을 차감하지 않는다");
     await page.evaluate("document.getElementById('applyCharacterButton').click(); true");
-    await waitFor(page, "!document.getElementById('characterDialog').open && document.getElementById('minerCanvas').dataset.outfit === 'space' && JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics.outfitId === 'space'", 8_000);
+    await waitFor(page, "!document.getElementById('characterDialog').open && document.getElementById('minerCanvas').dataset.outfit === 'space' && document.getElementById('minerCanvas').dataset.pose === 'side' && JSON.parse(localStorage.getItem('pixelMine.save')).data.cosmetics.outfitId === 'space'", 8_000);
     const purchasedOutfits = await page.evaluate(`(() => {
       const save = JSON.parse(localStorage.getItem('pixelMine.save'));
       return {
@@ -1464,6 +1537,8 @@ async function run() {
         selectOptions: [...document.getElementById('gameOutfitSelect').options].map((option) => option.value),
         selectDisabled: document.getElementById('gameOutfitSelect').disabled,
         actorOutfit: document.getElementById('minerActor').dataset.outfit,
+        actorAnimationSheet: document.getElementById('minerCanvas').dataset.animationSheet,
+        actorFrameIndex: Number(document.getElementById('minerCanvas').dataset.frameIndex),
         casualState: document.querySelector('[data-outfit-id="casual"]').dataset.state,
         spaceState: document.querySelector('[data-outfit-id="space"]').dataset.state,
         casualAchievement: save.data.unlockedAchievements.buy_casual_outfit,
@@ -1478,6 +1553,9 @@ async function run() {
         JSON.stringify(purchasedOutfits.selectOptions) === JSON.stringify(["workwear", "casual", "space"]) &&
         !purchasedOutfits.selectDisabled &&
         purchasedOutfits.actorOutfit === "space" &&
+        purchasedOutfits.actorAnimationSheet === "assets/pixel-miner-space-animation-sheet-10f-v1.png" &&
+        purchasedOutfits.actorFrameIndex >= 2 &&
+        purchasedOutfits.actorFrameIndex <= 5 &&
         purchasedOutfits.casualState === "owned" &&
         purchasedOutfits.spaceState === "current" &&
         purchasedOutfits.casualAchievement > 0 &&

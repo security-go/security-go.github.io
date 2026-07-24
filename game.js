@@ -27,10 +27,31 @@
   const CHARACTER_CELL_SIZE = 418;
   const CHARACTER_CANVAS_WIDTH = 360;
   const CHARACTER_HORIZONTAL_TRIM = (CHARACTER_CELL_SIZE - CHARACTER_CANVAS_WIDTH) / 2;
+  const MINER_ANIMATION_CELL_SIZE = 256;
+  const MINER_ANIMATION_COLUMN_COUNT = 10;
+  const MINER_ANIMATION_ROW_COUNT = 3;
+  const MINER_IDLE_FRAMES = Object.freeze([0, 1]);
+  const MINER_WALK_FRAMES = Object.freeze([2, 3, 4, 5]);
+  const MINER_MINING_FRAMES = Object.freeze([6, 7, 8, 9]);
+  const MINER_ANIMATION_FRAME_NAMES = Object.freeze([
+    "대기",
+    "숨 고르기",
+    "걷기 1",
+    "걷기 2",
+    "걷기 3",
+    "걷기 4",
+    "채굴 준비",
+    "곡괭이 들어 올리기",
+    "곡괭이 내려치기",
+    "채굴 반동",
+  ]);
+  const MINER_IDLE_FRAME_MS = 210;
+  const MINER_WALK_FRAME_MS = 140;
+  const MINER_MINING_FRAME_DURATIONS = Object.freeze([90, 110, 110, 170]);
   const MINER_WALK_SPEED = 58;
   const MINER_STAGE_MARGIN = 16;
   const MINER_TURN_PAUSE_MS = 420;
-  const MINER_MINE_POSE_MS = 480;
+  const MINER_MINE_POSE_MS = MINER_MINING_FRAME_DURATIONS.reduce((total, duration) => total + duration, 0);
 
   const CHARACTER_DEFINITIONS = Object.freeze([
     Object.freeze({ id: "female", name: "여자 광부", shortName: "여자", row: 0 }),
@@ -48,6 +69,7 @@
       price: 0,
       unlockOreLevel: 0,
       src: "assets/pixel-miner-character-sheet-transparent.png",
+      animationSrc: "assets/pixel-miner-workwear-animation-sheet-10f-v1.png",
     }),
     Object.freeze({
       id: "casual",
@@ -58,6 +80,7 @@
       price: 10_000_000,
       unlockOreLevel: 2,
       src: "assets/pixel-miner-casual-character-sheet.png",
+      animationSrc: "assets/pixel-miner-casual-animation-sheet-10f-v1.png",
     }),
     Object.freeze({
       id: "space",
@@ -69,6 +92,7 @@
       unlockOreLevel: 4,
       requiresPurchaseConfirmation: true,
       src: "assets/pixel-miner-space-character-sheet.png",
+      animationSrc: "assets/pixel-miner-space-animation-sheet-10f-v1.png",
     }),
   ]);
 
@@ -532,6 +556,7 @@
   const outfitElements = new Map();
   const toastEntries = new Map();
   const characterImageCache = new Map();
+  const characterAnimationImageCache = new Map();
   const characterRenderTokens = new WeakMap();
   const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
   const minerActorState = {
@@ -542,6 +567,9 @@
     miningUntil: 0,
     idleUntil: 0,
     lastFrameAt: 0,
+    poseStartedAt: 0,
+    miningStartedAt: 0,
+    frameIndex: MINER_WALK_FRAMES[0],
   };
   const miningSoundEngine = {
     context: null,
@@ -1891,6 +1919,32 @@
     return imagePromise;
   }
 
+  function getCharacterAnimationImage(outfitId) {
+    if (characterAnimationImageCache.has(outfitId)) return characterAnimationImageCache.get(outfitId);
+
+    const outfit = getCharacterOutfit(outfitId);
+    const imagePromise = new Promise((resolve, reject) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.addEventListener("load", () => {
+        const expectedWidth = MINER_ANIMATION_CELL_SIZE * MINER_ANIMATION_COLUMN_COUNT;
+        const expectedHeight = MINER_ANIMATION_CELL_SIZE * MINER_ANIMATION_ROW_COUNT;
+        if (image.naturalWidth !== expectedWidth || image.naturalHeight !== expectedHeight) {
+          reject(new Error(`${outfit.name} 애니메이션 시트 크기가 ${expectedWidth}×${expectedHeight}px이 아닙니다.`));
+          return;
+        }
+        resolve(image);
+      }, { once: true });
+      image.addEventListener("error", () => {
+        reject(new Error(`${outfit.name} 애니메이션 시트를 불러오지 못했습니다.`));
+      }, { once: true });
+      image.src = outfit.animationSrc;
+    });
+
+    characterAnimationImageCache.set(outfitId, imagePromise);
+    return imagePromise;
+  }
+
   async function drawCharacterSprite(canvas, cosmetics, poseId = "front", facingLeft = false) {
     if (!(canvas instanceof HTMLCanvasElement)) return false;
     const character = getCharacterDefinition(cosmetics.characterId);
@@ -1934,6 +1988,67 @@
       canvas.dataset.facing = facingLeft ? "left" : "right";
       delete canvas.dataset.renderError;
       canvas.setAttribute("aria-label", `${outfit.name} ${character.name} ${pose.name}${facingLeft ? ", 왼쪽 방향" : ", 오른쪽 방향"}`);
+      return true;
+    } catch (error) {
+      if (characterRenderTokens.get(canvas) !== requestId) return null;
+      console.error(error);
+      canvas.dataset.renderError = "true";
+      return false;
+    }
+  }
+
+  async function drawMinerAnimationFrame(canvas, cosmetics, frameIndex, poseId, facingLeft = false) {
+    if (!(canvas instanceof HTMLCanvasElement)) return false;
+    const character = getCharacterDefinition(cosmetics.characterId);
+    const outfit = getCharacterOutfit(cosmetics.outfitId);
+    const safeFrameIndex = Number.isInteger(frameIndex) && frameIndex >= 0 && frameIndex < MINER_ANIMATION_COLUMN_COUNT
+      ? frameIndex
+      : MINER_IDLE_FRAMES[0];
+    const safePoseId = CHARACTER_POSES[poseId] ? poseId : "front";
+    const requestId = (characterRenderTokens.get(canvas) ?? 0) + 1;
+    characterRenderTokens.set(canvas, requestId);
+
+    try {
+      const image = await getCharacterAnimationImage(outfit.id);
+      if (characterRenderTokens.get(canvas) !== requestId) return null;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas 2D를 사용할 수 없습니다.");
+
+      canvas.width = MINER_ANIMATION_CELL_SIZE;
+      canvas.height = MINER_ANIMATION_CELL_SIZE;
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.imageSmoothingEnabled = false;
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.save();
+      if (facingLeft) {
+        context.translate(canvas.width, 0);
+        context.scale(-1, 1);
+      }
+      context.drawImage(
+        image,
+        safeFrameIndex * MINER_ANIMATION_CELL_SIZE,
+        character.row * MINER_ANIMATION_CELL_SIZE,
+        MINER_ANIMATION_CELL_SIZE,
+        MINER_ANIMATION_CELL_SIZE,
+        0,
+        0,
+        MINER_ANIMATION_CELL_SIZE,
+        MINER_ANIMATION_CELL_SIZE,
+      );
+      context.restore();
+
+      canvas.dataset.character = character.id;
+      canvas.dataset.outfit = outfit.id;
+      canvas.dataset.pose = safePoseId;
+      canvas.dataset.facing = facingLeft ? "left" : "right";
+      canvas.dataset.frameIndex = String(safeFrameIndex);
+      canvas.dataset.frameName = MINER_ANIMATION_FRAME_NAMES[safeFrameIndex];
+      canvas.dataset.animationSheet = outfit.animationSrc;
+      delete canvas.dataset.renderError;
+      canvas.setAttribute(
+        "aria-label",
+        `${outfit.name} ${character.name} ${MINER_ANIMATION_FRAME_NAMES[safeFrameIndex]}${facingLeft ? ", 왼쪽 방향" : ", 오른쪽 방향"}`,
+      );
       return true;
     } catch (error) {
       if (characterRenderTokens.get(canvas) !== requestId) return null;
@@ -2189,6 +2304,40 @@
     return Boolean(state?.settings.reducedMotion || reducedMotionMedia.matches);
   }
 
+  function setMinerActorPose(poseId, timestamp = performance.now()) {
+    const nextPose = CHARACTER_POSES[poseId] ? poseId : "front";
+    if (minerActorState.poseId === nextPose) return false;
+    minerActorState.poseId = nextPose;
+    minerActorState.poseStartedAt = timestamp;
+    return true;
+  }
+
+  function getLoopingMinerFrame(frames, frameDuration, timestamp, startedAt) {
+    const elapsed = Math.max(0, timestamp - startedAt);
+    return frames[Math.floor(elapsed / frameDuration) % frames.length];
+  }
+
+  function getMiningAnimationFrame(timestamp) {
+    const elapsed = Math.max(0, timestamp - minerActorState.miningStartedAt) % MINER_MINE_POSE_MS;
+    let frameEnd = 0;
+    for (let index = 0; index < MINER_MINING_FRAMES.length; index += 1) {
+      frameEnd += MINER_MINING_FRAME_DURATIONS[index];
+      if (elapsed < frameEnd) return MINER_MINING_FRAMES[index];
+    }
+    return MINER_MINING_FRAMES.at(-1);
+  }
+
+  function getMinerAnimationFrame(timestamp = performance.now()) {
+    if (shouldReduceMinerMotion()) {
+      return minerActorState.poseId === "mining" ? MINER_MINING_FRAMES[0] : MINER_IDLE_FRAMES[0];
+    }
+    if (minerActorState.poseId === "mining") return getMiningAnimationFrame(timestamp);
+    if (minerActorState.poseId === "side") {
+      return getLoopingMinerFrame(MINER_WALK_FRAMES, MINER_WALK_FRAME_MS, timestamp, minerActorState.poseStartedAt);
+    }
+    return getLoopingMinerFrame(MINER_IDLE_FRAMES, MINER_IDLE_FRAME_MS, timestamp, minerActorState.poseStartedAt);
+  }
+
   function getMinerActorMaxX() {
     if (!dom.mineStage || !dom.minerActor) return MINER_STAGE_MARGIN;
     const stageWidth = dom.mineStage.clientWidth;
@@ -2203,24 +2352,32 @@
     dom.minerActor.dataset.x = minerActorState.x.toFixed(2);
   }
 
-  function renderMinerActorPose(force = false) {
+  function renderMinerActorPose(force = false, timestamp = performance.now()) {
     if (!state || !dom.minerActor) return;
     const nextPose = CHARACTER_POSES[minerActorState.poseId] ? minerActorState.poseId : "front";
     const nextFacing = minerActorState.facingLeft ? "left" : "right";
+    const nextFrameIndex = getMinerAnimationFrame(timestamp);
     const changed =
       dom.minerActor.dataset.pose !== nextPose ||
       dom.minerActor.dataset.facing !== nextFacing ||
       dom.minerActor.dataset.character !== state.cosmetics.characterId ||
-      dom.minerActor.dataset.outfit !== state.cosmetics.outfitId;
+      dom.minerActor.dataset.outfit !== state.cosmetics.outfitId ||
+      dom.minerActor.dataset.frameIndex !== String(nextFrameIndex);
 
+    minerActorState.frameIndex = nextFrameIndex;
+    if (!force && !changed) return;
     dom.minerActor.dataset.pose = nextPose;
     dom.minerActor.dataset.facing = nextFacing;
+    dom.minerActor.dataset.character = state.cosmetics.characterId;
+    dom.minerActor.dataset.outfit = state.cosmetics.outfitId;
+    dom.minerActor.dataset.frameIndex = String(nextFrameIndex);
+    dom.minerActor.dataset.frameName = MINER_ANIMATION_FRAME_NAMES[nextFrameIndex];
     dom.minerActor.dataset.moving = String(nextPose === "side" && !shouldReduceMinerMotion());
-    if (!force && !changed) return;
 
-    void drawCharacterSprite(
+    void drawMinerAnimationFrame(
       dom.minerCanvas,
       state.cosmetics,
+      nextFrameIndex,
       nextPose,
       minerActorState.facingLeft,
     ).then((rendered) => {
@@ -2233,6 +2390,7 @@
     stopMinerActorMotion();
     window.clearTimeout(minerPoseResetTimer);
     minerPoseResetTimer = null;
+    const now = performance.now();
     minerActorState.x = MINER_STAGE_MARGIN;
     minerActorState.direction = 1;
     minerActorState.facingLeft = false;
@@ -2240,8 +2398,11 @@
     minerActorState.miningUntil = 0;
     minerActorState.idleUntil = 0;
     minerActorState.lastFrameAt = 0;
+    minerActorState.poseStartedAt = now;
+    minerActorState.miningStartedAt = 0;
+    minerActorState.frameIndex = shouldReduceMinerMotion() ? MINER_IDLE_FRAMES[0] : MINER_WALK_FRAMES[0];
     positionMinerActor();
-    renderMinerActorPose(true);
+    renderMinerActorPose(true, now);
     startMinerActorMotion();
   }
 
@@ -2271,15 +2432,13 @@
 
     const elapsedSeconds = Math.min(0.05, Math.max(0, (timestamp - minerActorState.lastFrameAt) / 1_000));
     minerActorState.lastFrameAt = timestamp;
-    const previousPose = minerActorState.poseId;
-    const previousFacing = minerActorState.facingLeft;
 
     if (timestamp < minerActorState.miningUntil) {
-      minerActorState.poseId = "mining";
+      setMinerActorPose("mining", timestamp);
     } else if (timestamp < minerActorState.idleUntil) {
-      minerActorState.poseId = "front";
+      setMinerActorPose("front", timestamp);
     } else {
-      minerActorState.poseId = "side";
+      setMinerActorPose("side", timestamp);
       minerActorState.facingLeft = minerActorState.direction < 0;
       minerActorState.x += minerActorState.direction * MINER_WALK_SPEED * elapsedSeconds;
       const maxX = getMinerActorMaxX();
@@ -2288,21 +2447,19 @@
         minerActorState.x = maxX;
         minerActorState.direction = -1;
         minerActorState.facingLeft = true;
-        minerActorState.poseId = "front";
+        setMinerActorPose("front", timestamp);
         minerActorState.idleUntil = timestamp + MINER_TURN_PAUSE_MS;
       } else if (minerActorState.x <= MINER_STAGE_MARGIN) {
         minerActorState.x = MINER_STAGE_MARGIN;
         minerActorState.direction = 1;
         minerActorState.facingLeft = false;
-        minerActorState.poseId = "front";
+        setMinerActorPose("front", timestamp);
         minerActorState.idleUntil = timestamp + MINER_TURN_PAUSE_MS;
       }
     }
 
     positionMinerActor();
-    if (previousPose !== minerActorState.poseId || previousFacing !== minerActorState.facingLeft) {
-      renderMinerActorPose();
-    }
+    renderMinerActorPose(false, timestamp);
     minerAnimationFrameId = window.requestAnimationFrame(animateMinerActor);
   }
 
@@ -2310,19 +2467,27 @@
     if (!state || !dom.minerActor) return;
     const now = performance.now();
     const actorCenter = minerActorState.x + dom.minerActor.getBoundingClientRect().width / 2;
+    const alreadyMining = minerActorState.poseId === "mining" && now < minerActorState.miningUntil;
     minerActorState.facingLeft = actorCenter > dom.mineStage.clientWidth / 2;
-    minerActorState.poseId = "mining";
+    setMinerActorPose("mining", now);
+    if (!alreadyMining) minerActorState.miningStartedAt = now;
     minerActorState.miningUntil = now + MINER_MINE_POSE_MS;
     minerActorState.idleUntil = 0;
-    renderMinerActorPose(true);
+    renderMinerActorPose(true, now);
 
     window.clearTimeout(minerPoseResetTimer);
-    minerPoseResetTimer = window.setTimeout(() => {
-      minerPoseResetTimer = null;
-      if (!state || !shouldReduceMinerMotion()) return;
-      minerActorState.poseId = "front";
-      renderMinerActorPose(true);
-    }, MINER_MINE_POSE_MS);
+    minerPoseResetTimer = null;
+    if (shouldReduceMinerMotion()) {
+      minerPoseResetTimer = window.setTimeout(() => {
+        minerPoseResetTimer = null;
+        if (!state || !shouldReduceMinerMotion()) return;
+        const resetAt = performance.now();
+        setMinerActorPose("front", resetAt);
+        minerActorState.miningUntil = 0;
+        minerActorState.miningStartedAt = 0;
+        renderMinerActorPose(true, resetAt);
+      }, MINER_MINE_POSE_MS);
+    }
     startMinerActorMotion();
   }
 
@@ -2333,20 +2498,32 @@
 
   function syncMinerMotionSetting() {
     if (!state || !dom.minerActor || !sessionStarted) return;
+    const now = performance.now();
+    window.clearTimeout(minerPoseResetTimer);
+    minerPoseResetTimer = null;
     if (shouldReduceMinerMotion()) {
       stopMinerActorMotion();
       minerActorState.x = MINER_STAGE_MARGIN;
+      minerActorState.direction = 1;
+      minerActorState.facingLeft = false;
       minerActorState.poseId = "front";
       minerActorState.miningUntil = 0;
       minerActorState.idleUntil = 0;
+      minerActorState.poseStartedAt = now;
+      minerActorState.miningStartedAt = 0;
+      minerActorState.frameIndex = MINER_IDLE_FRAMES[0];
       positionMinerActor();
-      renderMinerActorPose(true);
+      renderMinerActorPose(true, now);
       return;
     }
 
     minerActorState.poseId = "side";
+    minerActorState.facingLeft = minerActorState.direction < 0;
     minerActorState.idleUntil = 0;
-    renderMinerActorPose(true);
+    minerActorState.poseStartedAt = now;
+    minerActorState.miningStartedAt = 0;
+    minerActorState.frameIndex = MINER_WALK_FRAMES[0];
+    renderMinerActorPose(true, now);
     startMinerActorMotion();
   }
 

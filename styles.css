@@ -787,8 +787,8 @@ select:focus-visible {
   z-index: 2;
   bottom: 24px;
   left: 0;
-  width: clamp(90px, 13vw, 118px);
-  aspect-ratio: 360 / 418;
+  width: clamp(104px, 15vw, 138px);
+  aspect-ratio: 1;
   pointer-events: none;
   transform: translate3d(16px, 0, 0);
   will-change: transform;
@@ -2147,7 +2147,7 @@ body.reduce-motion *::after {
 
   .miner-actor {
     bottom: 22px;
-    width: clamp(78px, 25vw, 96px);
+    width: clamp(88px, 28vw, 110px);
   }
 
   .ore-progression-bonus {
