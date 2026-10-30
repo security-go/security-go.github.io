@@ -1,0 +1,12 @@
+{
+  "name": "eunbit-seongga",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "check": "node --check app.js && node --check engine.js && node --check world.js && node --check camera.js && node --check network.js && node --check multiplayer.js && node --check server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  }
+}

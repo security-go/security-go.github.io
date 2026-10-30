@@ -1,0 +1,13 @@
+**
+!Dockerfile
+!package.json
+!server.mjs
+!index.html
+!style.css
+!app.js
+!favicon.svg
+!engine.js
+!world.js
+!camera.js
+!network.js
+!multiplayer.js
